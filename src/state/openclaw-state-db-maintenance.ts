@@ -21,6 +21,7 @@ import {
   OPENCLAW_STATE_SCHEMA_VERSION,
   type OpenClawStateDatabaseOptions,
 } from "./openclaw-state-db-contract.js";
+import { migrateCronDeliveryAttemptState } from "./openclaw-state-db-cron-delivery-migration.js";
 import {
   hasDanglingSkillWorkshopCollectionReviewIndex,
   LEGACY_SKILL_WORKSHOP_COLLECTION_REVIEWS_INDEX,
@@ -171,6 +172,8 @@ const STATE_MIGRATION_ALLOWED_MISSING_TABLES = {
   15: LAZY_ADDITIVE_STATE_TABLES,
   16: LAZY_ADDITIVE_STATE_TABLES,
   17: LAZY_ADDITIVE_STATE_TABLES,
+  18: LAZY_ADDITIVE_STATE_TABLES,
+  19: LAZY_ADDITIVE_STATE_TABLES,
 } as const satisfies Record<number, readonly string[]>;
 type OpenClawStateMigrationVersion = keyof typeof STATE_MIGRATION_ALLOWED_MISSING_TABLES;
 
@@ -267,7 +270,7 @@ export const openClawStateMigrationAssertions = new Map<
   number,
   (database: DatabaseSync, options: { pathname: string }) => void
 >(
-  ([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] as const).map(
+  ([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] as const).map(
     (version) =>
       [
         version,
@@ -560,6 +563,10 @@ export const versionedStateMigrations: ReadonlyArray<{
   {
     migrate: migrateGitHubPublicationRequesterAuthority,
     applied: "Added original requester authority to GitHub publication receipts (v18)",
+  },
+  {
+    migrate: migrateCronDeliveryAttemptState,
+    applied: "Recorded cron completion delivery attempt uncertainty (v20)",
   },
 ];
 
