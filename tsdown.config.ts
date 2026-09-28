@@ -456,8 +456,6 @@ function buildCoreDistEntries(): Record<string, string> {
     // Keep long-lived lazy runtime boundaries on stable filenames so rebuilt
     // dist/ trees do not strand already-running gateways on stale hashed chunks.
     "agents/agent-bundle-mcp-runtime": "src/agents/agent-bundle-mcp-runtime.ts",
-    // Published updater cleanup still imports these facts after replacing the package.
-    "agents/provider-runtime-lifecycle": "src/agents/provider-runtime-lifecycle.ts",
     "agents/mcp-auth-profile.runtime": "src/agents/mcp-auth-profile.runtime.ts",
     "agents/auth-profiles.runtime": "src/agents/auth-profiles.runtime.ts",
     "agents/model-catalog.runtime": "src/agents/model-catalog.runtime.ts",

@@ -177,8 +177,3 @@ export async function disposeAllSessionMcpRuntimes(): Promise<void> {
 export function getSessionMcpRuntimeManagerForTesting(): SessionMcpRuntimeManager {
   return getSessionMcpRuntimeManager();
 }
-
-export {
-  completeDeferredSessionMcpRuntimeRetirement,
-  releaseSessionMcpRuntime,
-} from "./agent-bundle-mcp-manager-cleanup.js";

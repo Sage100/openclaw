@@ -64,4 +64,4 @@ export {
 export { markGatewayDraining, resetAllLanes } from "../../process/command-queue.js";
 export { abortPendingChannelReloads } from "../../gateway/server-reload-generation.js";
 
-export { stopActiveManagedProviderLocalServices as stopGatewayManagedProviderLocalServices } from "../../agents/provider-runtime-lifecycle.js";
+export { stopActiveManagedProviderLocalServices } from "../../agents/provider-runtime-lifecycle.js";
