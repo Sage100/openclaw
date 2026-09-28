@@ -1,4 +1,5 @@
 // Canonical agent project ownership for focused runs, full suites, and CI.
+import { cliProcessTestFiles } from "./vitest.cli-process-paths.mjs";
 import { databaseWorkerCoreTestFiles } from "./vitest.database-worker-core-paths.mjs";
 
 const agentsRoot = "src/agents";
@@ -44,7 +45,7 @@ export const agentVitestProjectOwners = {
     root: agentsRoot,
     dir: agentsRoot,
     include: [`${agentsRoot}/**/*.test.ts`],
-    exclude: databaseWorkerCoreTestFiles,
+    exclude: [...databaseWorkerCoreTestFiles, ...cliProcessTestFiles],
   },
   spawnProductionBoundary: {
     kind: "agentsSpawnProductionBoundary",
@@ -75,6 +76,7 @@ export const agentVitestProjectOwners = {
       ...spawnProductionBoundaryFiles,
       ...coreIsolatedFiles,
       ...databaseWorkerCoreTestFiles,
+      ...cliProcessTestFiles,
     ],
   },
   embedded: {

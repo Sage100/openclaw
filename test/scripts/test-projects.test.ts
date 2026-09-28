@@ -3449,6 +3449,7 @@ describe("scripts/test-projects changed-target routing", () => {
     "src/cli/help-exit.process.test.ts",
     "src/cli/update-dry-run-state.process.test.ts",
     "src/state/openclaw-database-verify.process.test.ts",
+    "src/agents/agent-command-local.test.ts",
   ])("routes source-child process test %s through its isolated project", (file) => {
     expectSingleVitestRunPlan(buildVitestRunPlans([file]), {
       config: "test/vitest/vitest.cli-process.config.ts",
@@ -3496,22 +3497,25 @@ describe("scripts/test-projects changed-target routing", () => {
     },
   );
 
-  it("deduplicates the verifier process selected by a state directory and exact leaf", () => {
-    const plans = buildVitestRunPlans([
-      "src/state",
-      "src/state/openclaw-database-verify.process.test.ts",
-    ]);
-    expect(
-      plans.filter((plan) => plan.config === "test/vitest/vitest.cli-process.config.ts"),
-    ).toEqual([
-      {
-        config: "test/vitest/vitest.cli-process.config.ts",
-        forwardedArgs: [],
-        includePatterns: ["src/state/openclaw-database-verify.process.test.ts"],
-        watchMode: false,
-      },
-    ]);
-  });
+  it.each([
+    { directory: "src/state", file: "src/state/openclaw-database-verify.process.test.ts" },
+    { directory: "src/agents", file: "src/agents/agent-command-local.test.ts" },
+  ])(
+    "deduplicates the process selected by $directory and its exact leaf",
+    ({ directory, file }) => {
+      const plans = buildVitestRunPlans([directory, file]);
+      expect(
+        plans.filter((plan) => plan.config === "test/vitest/vitest.cli-process.config.ts"),
+      ).toEqual([
+        {
+          config: "test/vitest/vitest.cli-process.config.ts",
+          forwardedArgs: [],
+          includePatterns: [file],
+          watchMode: false,
+        },
+      ]);
+    },
+  );
 
   it("does not fan out the verifier for an unrelated exact state test", () => {
     expect(
@@ -5542,6 +5546,14 @@ describe("scripts/test-projects full-suite sharding", () => {
       const targetedPlans = (config: string) =>
         plans.filter((plan) => plan.config === config && plan.forwardedArgs.length > 0);
       expect(targetedPlans("test/vitest/vitest.agents-core.config.ts")).toHaveLength(6);
+      expect(
+        targetedPlans("test/vitest/vitest.agents-core.config.ts").flatMap(
+          (plan) => plan.forwardedArgs,
+        ),
+      ).not.toContain("src/agents/agent-command-local.test.ts");
+      expect(
+        configs.filter((config) => config === "test/vitest/vitest.cli-process.config.ts"),
+      ).toHaveLength(1);
       const gatewayTargets = targetedPlans("test/vitest/vitest.gateway-server.config.ts").map(
         (plan) => plan.forwardedArgs,
       );

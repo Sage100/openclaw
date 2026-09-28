@@ -1103,6 +1103,7 @@ function listUnitSrcFullSuiteTestTargets(cwd: string) {
 
 function listAgentsCoreFullSuiteTestTargets(cwd: string) {
   const isolatedTests = new Set([
+    ...cliProcessTestFiles,
     ...agentVitestProjectOwners.spawnProductionBoundary.include,
     ...agentVitestProjectOwners.coreIsolated.include,
   ]);
