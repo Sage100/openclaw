@@ -6,6 +6,8 @@ import { isServiceInspectionReason } from "../daemon/service-inspection-error.js
 import { normalizeSupportDiagnosticErrorCode } from "../logging/diagnostic-support-redaction.js";
 import { CLAWHUB_INSTALL_ERROR_CODE } from "../plugins/clawhub-error-codes.js";
 import { PLUGIN_INSTALL_ERROR_CODE } from "../plugins/install-types.js";
+import { BUNDLED_OFFICIAL_EXTERNAL_PLUGIN_CATALOG_ENTRIES } from "../plugins/official-external-plugin-bundled-catalogs.js";
+import { resolveOfficialExternalPluginId } from "../plugins/official-external-plugin-catalog-source.js";
 import {
   SKIPPED_UPDATE_OUTCOMES,
   UPDATE_ENVIRONMENT_FAILURE_REASONS,
@@ -143,24 +145,16 @@ const PUBLIC_CODES = new Set<string>([
   "repair-requires-config-change",
 ]);
 
-let publicPluginIds: Promise<ReadonlySet<string>> | undefined;
+let publicPluginIds: ReadonlySet<string> | undefined;
 let publicDoctorCheckIds: Promise<ReadonlySet<string>> | undefined;
 
-function loadPublicPluginIds(): Promise<ReadonlySet<string>> {
-  publicPluginIds ??= Promise.all([
-    import("../plugins/official-external-plugin-bundled-catalogs.js"),
-    import("../plugins/official-external-plugin-catalog-source.js"),
-  ]).then(([catalogs, identities]) => {
-    // Installation directories can contain private extensions; only shipped catalogs establish public IDs.
-    const ids = new Set<string>();
-    for (const entry of catalogs.BUNDLED_OFFICIAL_EXTERNAL_PLUGIN_CATALOG_ENTRIES) {
-      const id = identities.resolveOfficialExternalPluginId(entry);
-      if (id) {
-        ids.add(id);
-      }
-    }
-    return ids;
-  });
+async function loadPublicPluginIds(): Promise<ReadonlySet<string>> {
+  // Installation directories can contain private extensions; only shipped catalogs establish public IDs.
+  publicPluginIds ??= new Set(
+    BUNDLED_OFFICIAL_EXTERNAL_PLUGIN_CATALOG_ENTRIES.map(resolveOfficialExternalPluginId).filter(
+      (id) => id !== undefined,
+    ),
+  );
   return publicPluginIds;
 }
 
