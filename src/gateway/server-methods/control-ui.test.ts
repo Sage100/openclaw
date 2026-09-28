@@ -275,7 +275,7 @@ describe("controlUi.githubPreview", () => {
     expect(respond).toHaveBeenCalledWith(false, undefined, {
       code: "UNAVAILABLE",
       message:
-        "The configured Control UI GitHub credential is unavailable. Resolve gateway.controlUi.github.token and retry.",
+        "The configured Control UI GitHub credential is unavailable. Check gateway.controlUi.github.token and its host binding, then retry.",
       retryable: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -485,7 +485,7 @@ describe("controlUi.githubPreview", () => {
         reason: "secret reference was not found",
       }),
       message:
-        "The configured Control UI GitHub credential is unavailable. Resolve gateway.controlUi.github.token and retry.",
+        "The configured Control UI GitHub credential is unavailable. Check gateway.controlUi.github.token and its host binding, then retry.",
       retryable: false,
     },
   ])(

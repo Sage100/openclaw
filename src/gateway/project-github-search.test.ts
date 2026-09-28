@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  clearRuntimeConfigSnapshot,
+  setRuntimeConfigSnapshot,
+} from "../config/runtime-snapshot.js";
 import { searchRemoteProjects } from "./project-github-search.js";
 
 function repository(fullName: string, updatedAt: string, description?: string) {
@@ -11,6 +15,7 @@ function repository(fullName: string, updatedAt: string, description?: string) {
     html_url: `https://github.com/${owner}/${name}`,
     clone_url: `https://github.com/${owner}/${name}.git`,
     description: description ?? null,
+    default_branch: "main",
     updated_at: updatedAt,
   };
 }
@@ -29,6 +34,25 @@ function json(value: unknown, status = 200): Response {
 describe("project GitHub search", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    clearRuntimeConfigSnapshot();
+  });
+
+  it("separates native search results when the selected Enterprise host changes", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => json({ items: [] }));
+    const config = (host: string) => ({
+      gateway: { github: { host, apiBaseUrl: `https://${host}/api/v3` } },
+    });
+    setRuntimeConfigSnapshot(config("a.ghe.example.test"));
+    await searchRemoteProjects("same-query", { token: "native-token", fetchImpl, now: 1_000 });
+    setRuntimeConfigSnapshot(config("b.ghe.example.test"));
+    await searchRemoteProjects("same-query", { token: "native-token", fetchImpl, now: 1_000 });
+
+    expect(fetchImpl.mock.calls.map(([url]) => requestUrl(url).split("/api/v3/")[0])).toEqual([
+      "https://a.ghe.example.test",
+      "https://a.ghe.example.test",
+      "https://b.ghe.example.test",
+      "https://b.ghe.example.test",
+    ]);
   });
 
   it("returns anonymous public results with a typed missing-credential state", async () => {
@@ -102,6 +126,36 @@ describe("project GitHub search", () => {
       "Authorization",
       "Bearer test-github-token",
     );
+  });
+
+  it("accepts an explicitly prepared native credential without ambient token state", async () => {
+    const selected = repository("acme/private-repo", "2026-09-23T00:00:00Z");
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = requestUrl(input);
+      if (url.includes("/repos/acme/private-repo")) {
+        return json(selected);
+      }
+      if (url.includes("/user/repos")) {
+        return json([selected]);
+      }
+      return json({ items: [selected] });
+    });
+
+    const result = await searchRemoteProjects("acme/private-repo", {
+      env: {},
+      fetchImpl,
+      now: 250,
+      token: "prepared-native-token",
+    });
+
+    expect(result).toMatchObject({
+      credential: "configured",
+      projects: [{ fullName: "acme/private-repo", defaultBranch: "main" }],
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    for (const [, init] of fetchImpl.mock.calls) {
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer prepared-native-token");
+    }
   });
 
   it("preserves GitHub best-match order for global results instead of re-sorting by recency", async () => {

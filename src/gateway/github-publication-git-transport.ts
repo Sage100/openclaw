@@ -7,7 +7,12 @@ import { hasErrnoCode } from "../infra/errno.js";
 import { gitNullConfigPath } from "../infra/git-exec.js";
 import { retryableGitNetworkOperation, withGitNetworkRetry } from "../infra/git-network-retry.js";
 import { runCommandBuffered } from "../process/exec.js";
-import { githubPublicationUnsafeConfigArgs } from "./github-publication-base.js";
+import {
+  githubPublicationBaseFetchArgs,
+  githubPublicationBaseLookupArgs,
+  parseGitHubPublicationBaseRef,
+  githubPublicationUnsafeConfigArgs,
+} from "./github-publication-base.js";
 import { isGitHubPublicationWorkflowPath } from "./github-publication-workflows.js";
 
 type GitCommandOptions = {
@@ -19,12 +24,16 @@ type GitCommandOptions = {
 };
 type GitCommandResult = { code: number | null; stdout: Buffer };
 
-export function githubPublicationApiArgs(endpoint: string, method = "GET"): string[] {
+export function githubPublicationApiArgs(
+  endpoint: string,
+  method = "GET",
+  host = "github.com",
+): string[] {
   return [
     "gh",
     "api",
     "--hostname",
-    "github.com",
+    host,
     "--method",
     method,
     endpoint,
@@ -91,6 +100,35 @@ export function createGitHubPublicationCommandRunner(assertCurrent?: () => void)
       return result;
     },
   };
+}
+
+export async function readGitHubPublicationBaseSha(
+  run: ReturnType<typeof createGitHubPublicationCommandRunner>["run"],
+  repository: string,
+  branch: string,
+  host: string,
+  env: NodeJS.ProcessEnv,
+) {
+  const result = await run(githubPublicationBaseLookupArgs(repository, branch, host), { env });
+  if (result.code !== 0) {
+    throw new Error("GitHub publication workspace base branch could not be verified.");
+  }
+  return parseGitHubPublicationBaseRef(result.stdout.toString("utf8"), branch);
+}
+
+export async function requireGitHubPublicationCommit(
+  run: ReturnType<typeof createGitHubPublicationCommandRunner>["run"],
+  repository: string,
+  sha: string,
+  host: string,
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  failure: string,
+) {
+  const result = await run(githubPublicationBaseFetchArgs(repository, sha, host), { cwd, env });
+  if (result.code !== 0) {
+    throw new Error(failure);
+  }
 }
 
 // A recursive tree listing scales with repository size (openclaw itself is

@@ -50,6 +50,7 @@ export async function invokeProjectMethod(
   profileId?: string,
   handlers = projectsHandlers,
   projection?: SessionRowProjection,
+  getConfig: () => OpenClawConfig = () => cfg as OpenClawConfig,
 ) {
   const capture: {
     result: {
@@ -72,7 +73,7 @@ export async function invokeProjectMethod(
         capture.result = { ok, payload, error };
       },
       context: bindSessionRowProjection(
-        { getRuntimeConfig: () => cfg as OpenClawConfig },
+        { getRuntimeConfig: getConfig },
         () => projection ?? ownedProjection,
       ) as never,
       client: {

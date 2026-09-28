@@ -45,7 +45,7 @@ export function sessionPullRequestRepositoryApiUrl(target: {
   owner: string;
   repo: string;
 }): string {
-  return `${gitHubPublicApi.GITHUB_API_ORIGIN}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}`;
+  return `${gitHubPublicApi.GITHUB_API_BASE_URL}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}`;
 }
 
 function incomplete(): ControlUiGitHubError {

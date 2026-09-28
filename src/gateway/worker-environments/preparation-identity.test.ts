@@ -38,6 +38,7 @@ describe("worker preparation identity", () => {
       settings: { disk: 20, region: "test" },
       install: "bundle",
       machineClass: "small",
+      os: "linux",
     };
     equivalent.artifacts.enabledPluginIds.reverse();
     expect(createWorkerProjectPreparationIdentity(equivalent)).toEqual(
@@ -87,6 +88,12 @@ describe("worker preparation identity", () => {
       "target",
       (value: typeof input) => {
         value.target.arch = "arm64";
+      },
+    ],
+    [
+      "OS",
+      (value: typeof input) => {
+        value.target.platform = "darwin";
       },
     ],
     [

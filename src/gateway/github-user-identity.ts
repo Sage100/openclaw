@@ -159,7 +159,7 @@ async function resolveGitHubUserIdentityByLogin(
   let payload: unknown;
   try {
     payload = await gitHubPublicApi.fetchGitHubJson(
-      `${gitHubPublicApi.GITHUB_API_ORIGIN}/users/${encodeURIComponent(requestedLogin)}`,
+      `${gitHubPublicApi.GITHUB_API_BASE_URL}/users/${encodeURIComponent(requestedLogin)}`,
       fetch,
       token,
     );
@@ -214,7 +214,7 @@ function resolveGitHubUserIdentityById(
     async () => {
       try {
         const response = await gitHubPublicApi.fetchGitHubApi(
-          `${gitHubPublicApi.GITHUB_API_ORIGIN}/user/${accountId}`,
+          `${gitHubPublicApi.GITHUB_API_BASE_URL}/user/${accountId}`,
           fetchImpl,
           token,
           undefined,

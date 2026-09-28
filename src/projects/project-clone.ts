@@ -4,6 +4,7 @@ import {
   collectNestedErrorCandidates,
   extractErrorCode,
 } from "@openclaw/normalization-core/error-coercion";
+import { resolveConfiguredGitHubHost } from "../agents/github-host.js";
 import { slugifyWorktreeTitle } from "../agents/worktrees/name.js";
 import { cloneEnvWithPlatformSemantics } from "../config/config-env-vars.js";
 import { resolveStateDir } from "../config/paths.js";
@@ -41,7 +42,9 @@ async function existingCanonicalProject(
   options: OpenClawStateDatabaseOptions,
 ): Promise<ProjectRegistryRecord | undefined> {
   return (await listProjectRegistry(cfg, options)).find((project) => {
-    const origin = project.originUrl ? parseProjectGitUrl(project.originUrl) : null;
+    const origin = project.originUrl
+      ? parseProjectGitUrl(project.originUrl, resolveConfiguredGitHubHost(cfg))
+      : null;
     return origin?.url === canonicalUrl;
   });
 }
@@ -57,7 +60,7 @@ export async function materializeProjectClone(
 ): Promise<ProjectRegistryRecord> {
   const { cfg, gitUrl, name, requiredCommit } = input;
   const { signal, timeoutMs, token } = options;
-  const parsed = parseProjectGitUrl(gitUrl);
+  const parsed = parseProjectGitUrl(gitUrl, resolveConfiguredGitHubHost(cfg));
   if (!parsed) {
     throw new ProjectCloneError(
       "invalid_url",

@@ -32,6 +32,7 @@ import { assertGatewayRuntimeSecurityConfig } from "./server-runtime-config.js";
 import { logGatewayReady } from "./server-startup-readiness.js";
 import { startGatewayTlsRenewal } from "./server-tls-renewal.js";
 import type { GatewayHttpTransport } from "./server-transport-bridge.js";
+import { createAuthenticatedControlUiPresenceProjection } from "./server/client-human-presence.js";
 import { collectGatewayWorkerPoolMetrics } from "./server/process-vitals.js";
 import { disconnectDisallowedGatewayPolicyClients } from "./server/ws-origin-policy.js";
 import { DEFAULT_TERMINAL_DETACH_SECONDS } from "./terminal/session-limits.js";
@@ -155,6 +156,18 @@ export async function finishGatewayStartup(params: {
     "gateway.ws-imports",
     () => import("./server/ws-connection.js"),
   );
+  if (workerEnvironmentService) {
+    const humanPresence = createAuthenticatedControlUiPresenceProjection(clients, (present) => {
+      void workerEnvironmentService
+        .setHumanPresence(present)
+        .catch((error: unknown) =>
+          log.warn(`prepared-pool human presence update failed: ${String(error)}`),
+        );
+    });
+    registerGatewayLifetimeSidecars({ stop: humanPresence.stop });
+    // Close a crash-left active marker before worker reconciliation starts.
+    await workerEnvironmentService.setHumanPresence(humanPresence.current());
+  }
   await startupTrace.measure("gateway.ws-attach", () =>
     attachGatewayWsConnectionHandler({
       wss,

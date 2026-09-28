@@ -1,3 +1,4 @@
+import { resolveConfiguredGitHubHost } from "../agents/github-host.js";
 import { getRuntimeConfigSnapshot } from "../config/runtime-snapshot.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
@@ -12,7 +13,7 @@ import {
 import type { ControlUiLinkReaderDocument } from "../shared/control-ui-link-reader.js";
 
 export const CONTROL_UI_GITHUB_CREDENTIAL_UNAVAILABLE_MESSAGE =
-  "The configured Control UI GitHub credential is unavailable. Resolve gateway.controlUi.github.token and retry.";
+  "The configured Control UI GitHub credential is unavailable. Check gateway.controlUi.github.token and its host binding, then retry.";
 
 export interface ControlUiGitHubError extends Error {
   readonly statusCode: number;
@@ -41,7 +42,10 @@ type GitHubDetailTarget =
 
 /** Host consumers depend on this public read contract, not the plugin's source graph. */
 type GitHubPublicApi = {
-  GITHUB_API_ORIGIN: string;
+  configureGitHubApi: (apiBaseUrl: string | undefined) => void;
+  getConfiguredGitHubApiUrls: () => { baseUrl: string; graphqlUrl: string };
+  GITHUB_API_BASE_URL: string;
+  GITHUB_GRAPHQL_URL: string;
   GITHUB_REQUEST_TIMEOUT_MS: number;
   ControlUiGitHubError: new (
     statusCode: number,
@@ -113,8 +117,21 @@ export function githubApiToken(
   env: NodeJS.ProcessEnv = process.env,
   config: OpenClawConfig | null = getRuntimeConfigSnapshot(),
 ): string | undefined {
+  const selectedHost = resolveConfiguredGitHubHost(config);
   const configured = config?.gateway?.controlUi?.github?.token;
   if (configured !== undefined) {
+    const credentialHost =
+      config?.gateway?.controlUi?.github?.host?.trim().toLowerCase() || "github.com";
+    if (credentialHost !== selectedHost) {
+      throw new SecretSurfaceUnavailableError({
+        ownerKind: "capability",
+        ownerId: "control-ui-github",
+        state: "unavailable",
+        paths: ["gateway.controlUi.github.host"],
+        refKeys: [],
+        reason: "service credential host does not match gateway.github.host",
+      });
+    }
     assertSecretOwnerAvailable("capability", "control-ui-github");
     const token = typeof configured === "string" ? configured.trim() : "";
     if (!token) {
@@ -129,7 +146,9 @@ export function githubApiToken(
     }
     return token;
   }
-  return env.GH_TOKEN?.trim() || env.GITHUB_TOKEN?.trim() || undefined;
+  return selectedHost === "github.com"
+    ? env.GH_TOKEN?.trim() || env.GITHUB_TOKEN?.trim() || undefined
+    : undefined;
 }
 
 export function hasConfiguredGitHubApiCredential(
@@ -137,8 +156,11 @@ export function hasConfiguredGitHubApiCredential(
   config: OpenClawConfig,
 ): boolean {
   return (
-    config.gateway?.controlUi?.github?.token !== undefined ||
-    Boolean(env.GH_TOKEN?.trim() || env.GITHUB_TOKEN?.trim())
+    (config.gateway?.controlUi?.github?.token !== undefined &&
+      (config.gateway.controlUi.github.host?.trim().toLowerCase() || "github.com") ===
+        resolveConfiguredGitHubHost(config)) ||
+    (resolveConfiguredGitHubHost(config) === "github.com" &&
+      Boolean(env.GH_TOKEN?.trim() || env.GITHUB_TOKEN?.trim()))
   );
 }
 
@@ -151,9 +173,14 @@ export const gitHubPublicApi = createLazyFacadeObjectValue<GitHubPublicApi>(() =
     dirName: "github",
     artifactBasename: "api.js",
   });
+  const configure = () =>
+    library.configureGitHubApi(getRuntimeConfigSnapshot()?.gateway?.github?.apiBaseUrl);
   const resolveScope = (env: NodeJS.ProcessEnv = process.env) => {
     const token = githubApiToken(env);
-    return { token, cacheScope: library.githubApiCredentialCacheScope(token) };
+    return {
+      token,
+      cacheScope: `${resolveConfiguredGitHubHost(getRuntimeConfigSnapshot())}:${library.githubApiCredentialCacheScope(token)}`,
+    };
   };
   const resolveReadIdentity = (
     identity: ControlUiGitHubPreviewIdentity | undefined,
@@ -176,6 +203,22 @@ export const gitHubPublicApi = createLazyFacadeObjectValue<GitHubPublicApi>(() =
   };
   return {
     ...library,
+    get GITHUB_API_BASE_URL() {
+      configure();
+      return library.getConfiguredGitHubApiUrls().baseUrl;
+    },
+    get GITHUB_GRAPHQL_URL() {
+      configure();
+      return library.getConfiguredGitHubApiUrls().graphqlUrl;
+    },
+    fetchGitHubApi(...args) {
+      configure();
+      return library.fetchGitHubApi(...args);
+    },
+    fetchGitHubJson(...args) {
+      configure();
+      return library.fetchGitHubJson(...args);
+    },
     resolveGitHubApiCredentialScope: resolveScope,
     formatControlUiGitHubPreviewError(error) {
       return isTrustedSecretSurfaceUnavailableError(error)
@@ -183,6 +226,7 @@ export const gitHubPublicApi = createLazyFacadeObjectValue<GitHubPublicApi>(() =
         : library.formatControlUiGitHubPreviewError(error);
     },
     loadControlUiGitHubPreview(target, identity, fetchImpl, refresh) {
+      configure();
       return library.loadControlUiGitHubPreview(
         target,
         resolveReadIdentity(identity),
@@ -191,6 +235,7 @@ export const gitHubPublicApi = createLazyFacadeObjectValue<GitHubPublicApi>(() =
       );
     },
     loadGitHubDetail(target, identity, fetchImpl, refresh) {
+      configure();
       return library.loadGitHubDetail(target, resolveReadIdentity(identity), fetchImpl, refresh);
     },
   };

@@ -4,6 +4,7 @@ import { normalizeOptionalString } from "@openclaw/normalization-core/string-coe
 import type { FastMode } from "../../api/types.ts";
 import { normalizeAgentId } from "../../lib/sessions/session-key.ts";
 import { getSafeLocalStorage } from "../../local-storage.ts";
+import type { DraftRemoteProject } from "./project-chip.ts";
 
 const STORAGE_KEY_PREFIX = "openclaw.new-session.preferences.v1:";
 const IDENTITY_KEY_PREFIX = "new-session.v1:";
@@ -65,6 +66,8 @@ export type NewSessionPreference = {
   folder?: string;
   where?: NewSessionWhere;
   projectId?: string;
+  remoteProject?: DraftRemoteProject | null;
+  defaultRepositoryOptOut?: boolean;
   worktree?: boolean;
   freshWorkspace?: boolean;
   baseRef?: string;
@@ -148,6 +151,21 @@ function normalizePreference(value: unknown): NewSessionPreference | null {
   } else if (preference.worktree === true) {
     // Preserve the legacy source choice before Git discovery clears worktree availability.
     preference.freshWorkspace = false;
+  }
+  if (typeof value.defaultRepositoryOptOut === "boolean") {
+    preference.defaultRepositoryOptOut = value.defaultRepositoryOptOut;
+  }
+  if (isRecord(value.remoteProject)) {
+    const identity = normalizeOptionalString(value.remoteProject.identity)?.slice(0, 200);
+    const cloneUrl = normalizeOptionalString(value.remoteProject.cloneUrl)?.slice(0, 2048);
+    const defaultBranch = normalizeOptionalString(value.remoteProject.defaultBranch)?.slice(0, 255);
+    if (identity && cloneUrl) {
+      preference.remoteProject = {
+        identity,
+        cloneUrl,
+        ...(defaultBranch ? { defaultBranch } : {}),
+      };
+    }
   }
   const where = normalizeWhere(value.where);
   if (where) {

@@ -1900,7 +1900,7 @@ describe("doctor health contributions", () => {
 
     await contribution.run(ctx);
     expect(mocks.note).toHaveBeenCalledWith(
-      expect.stringContaining("shared Gateway process environment"),
+      expect.stringContaining("gateway.controlUi.github.host matching gateway.github.host"),
       "GitHub projects",
     );
 

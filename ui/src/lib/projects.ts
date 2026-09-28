@@ -12,6 +12,7 @@ type ProjectCatalogSnapshot = {
 };
 export type ProjectCatalog = {
   readonly snapshot: ProjectCatalogSnapshot;
+  readonly loading: boolean;
   subscribe: (listener: () => void) => () => void;
   refresh: (invalidate?: boolean) => Promise<void>;
 };
@@ -163,6 +164,9 @@ export function projectsForGateway(gateway: ApplicationGateway): ProjectCatalog 
         void refresh();
       }
       return snapshot;
+    },
+    get loading() {
+      return pending !== null;
     },
     refresh,
     subscribe(listener) {

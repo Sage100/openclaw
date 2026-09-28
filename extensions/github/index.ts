@@ -34,6 +34,8 @@ export default definePluginEntry({
       api.registerGatewayMethod(
         method,
         async (options) => {
+          const { configureGitHubApi } = await import("./src/github-api.js");
+          configureGitHubApi(api.config.gateway?.github?.apiBaseUrl);
           const { githubHandlers } = await import("./src/handlers.js");
           await githubHandlers[method](options);
         },

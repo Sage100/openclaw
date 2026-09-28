@@ -4,6 +4,7 @@ import { createDeferred } from "openclaw/plugin-sdk/extension-shared";
 import { runCommandWithTimeout, type SpawnResult } from "openclaw/plugin-sdk/process-runtime";
 import { describe, expect, it, vi } from "vitest";
 import { openWarmImageStore } from "./crabbox-state.test-support.js";
+import { stopCrabboxLease } from "./crabbox-worker-command.js";
 import { commandResult } from "./crabbox-worker-provider.test-support.js";
 import {
   createWarmProvider,
@@ -28,6 +29,32 @@ const HELD_STOP = `
 `;
 
 describe("Crabbox stop lifetime", () => {
+  it("explicitly recovers an Azure fixed lease after local create-intent loss", async () => {
+    const runCommand = vi
+      .fn()
+      .mockResolvedValueOnce(
+        commandResult({
+          code: 4,
+          stderr: `${LEASE_ID}: Azure fixed lease cannot be adopted without its create intent`,
+        }),
+      )
+      .mockResolvedValueOnce(commandResult());
+
+    await expect(
+      stopCrabboxLease({
+        binary: "crabbox",
+        id: LEASE_ID,
+        provider: "azure",
+        runCommand,
+        warn: vi.fn(),
+      }),
+    ).resolves.toBeUndefined();
+    expect(runCommand.mock.calls.map(([argv]) => argv)).toEqual([
+      ["crabbox", "stop", "--provider", "azure", "--id", LEASE_ID],
+      ["crabbox", "stop", "--provider", "azure", "--id", LEASE_ID, "--force"],
+    ]);
+  });
+
   it.each(["destroy", "dispose", "inspection loss"] as const)(
     "retains heartbeat custody through %s and later disposal",
     async (entrance) => {

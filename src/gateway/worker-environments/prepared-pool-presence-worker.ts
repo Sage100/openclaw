@@ -1,0 +1,47 @@
+import { createSqliteWorkerOperationAdmission } from "../../infra/sqlite-worker-operation-admission.js";
+import { executeExistingOpenClawStateRead } from "../../state/openclaw-state-db-readonly.js";
+import { captureOpenClawStateWorkerContext } from "../../state/openclaw-state-worker-context.js";
+import { runOpenClawStateWorkerOperation } from "../../state/openclaw-state-worker-store.js";
+import type { PreparedPoolPresenceDemand } from "./prepared-pool-presence-store.js";
+
+export async function readPreparedPoolPresenceDemand(): Promise<
+  PreparedPoolPresenceDemand | undefined
+> {
+  const reply = await executeExistingOpenClawStateRead({}, { type: "preparedPoolPresence.read" });
+  if (!reply) {
+    return undefined;
+  }
+  if (!reply.ok || reply.type !== "preparedPoolPresence.read") {
+    throw new Error("Unexpected prepared-pool presence demand read result");
+  }
+  return reply.demand;
+}
+
+export function writePreparedPoolPresenceDemand(
+  value: PreparedPoolPresenceDemand | null,
+  assertCurrent: () => void,
+): Promise<PreparedPoolPresenceDemand | undefined> {
+  const context = captureOpenClawStateWorkerContext();
+  return runOpenClawStateWorkerOperation(
+    context,
+    (scope) =>
+      scope.execute({
+        type: "preparedPoolPresence.write",
+        input: value,
+      }),
+    {
+      assertCurrent,
+      createAdmission: () => ({
+        nativeLocations: [context.admission.databasePath],
+        admission: createSqliteWorkerOperationAdmission((request, grant) => {
+          if (request.stage !== "transaction" && request.stage !== "commit") {
+            throw new Error("Prepared-pool presence demand requires transaction admission");
+          }
+          context.admission.assertCurrent();
+          assertCurrent();
+          grant();
+        }),
+      }),
+    },
+  );
+}

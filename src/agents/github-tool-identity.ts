@@ -18,6 +18,12 @@ import type { GitHubToolIdentityConfig } from "../config/types.tools.js";
 import { hasErrnoCode } from "../infra/errno.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { resolveAgentConfig, resolveAgentWorkspaceDir } from "./agent-scope.js";
+import {
+  CLEARED_GITHUB_CREDENTIALS,
+  resolveGitHubApiBaseUrl,
+  resolveGitHubHost,
+  withGitHubToken,
+} from "./github-host-runtime.js";
 import { verifyGitHubCredential } from "./github-oauth-client.js";
 import { inspectGitHubOAuthRecord } from "./github-oauth-records.js";
 import {
@@ -191,7 +197,7 @@ function prepareGitHubToolEnvironmentForIdentity(
     params.sourceConfig?.gateway?.controlUi?.github?.token ??
     params.config.gateway?.controlUi?.github?.token;
   const credentialScrubEnv: Record<string, string> = managedLocalIdentity
-    ? { GH_TOKEN: "", GITHUB_TOKEN: "" }
+    ? { ...CLEARED_GITHUB_CREDENTIALS }
     : {};
   const excludedStoreNames: string[] = [];
   if (isSecretRef(previewToken)) {
@@ -438,6 +444,7 @@ async function resolveGitHubIdentityFacts(
 export type PreparedGitHubPublicationIdentity = Readonly<{
   source: "system-detected" | "system-configured" | "agent-override" | "personal";
   profileId?: string;
+  host?: string;
   account: GitHubToolAccount;
   env: NodeJS.ProcessEnv;
 }>;
@@ -460,13 +467,13 @@ export async function preparePersonalGitHubPublicationIdentity(params: {
   }
   params.assertCurrent();
   const env = {
-    ...process.env,
-    GH_TOKEN: token,
-    GITHUB_TOKEN: undefined,
+    ...withGitHubToken(process.env, token),
     GH_CONFIG_DIR: profileDir,
     GH_PROMPT_DISABLED: "1",
   };
-  const probe = await verifyGitHubCredential(token);
+  const probe = await verifyGitHubCredential(token, {
+    apiBaseUrl: resolveGitHubApiBaseUrl(),
+  });
   params.assertCurrent();
   if (probe.status !== "available") {
     throw new Error("My GitHub credential could not be verified; reconnect My GitHub.");
@@ -477,6 +484,7 @@ export async function preparePersonalGitHubPublicationIdentity(params: {
   return Object.freeze({
     source: "personal",
     profileId: params.profileId,
+    host: resolveGitHubHost(),
     account: probe.account,
     env: Object.freeze(env),
   });
@@ -491,6 +499,7 @@ export function matchesPreparedGitHubPublicationIdentity(params: {
   const current = resolveGitHubToolIdentity(params);
   return (
     current.source === params.identity.source &&
+    (params.identity.host ?? resolveGitHubHost()) === resolveGitHubHost() &&
     (current.source === "system-detected" || current.config.profileId === params.identity.profileId)
   );
 }
@@ -510,6 +519,8 @@ async function prepareSharedGitHubIdentity(
     GH_PROMPT_DISABLED: "1",
   });
   const env = currentEnvironment();
+  const host = resolveGitHubHost();
+  const apiBaseUrl = resolveGitHubApiBaseUrl();
   const readToken = () =>
     managed
       ? readManagedGitHubToken(identity.profileDir)
@@ -523,7 +534,10 @@ async function prepareSharedGitHubIdentity(
       throw new GitHubIdentityError("unavailable");
     }, params);
   }
-  const probe = await startGitHubIdentityOperation(() => verifyGitHubCredential(token), params);
+  const probe = await startGitHubIdentityOperation(
+    () => verifyGitHubCredential(token, { apiBaseUrl }),
+    params,
+  );
   return startGitHubIdentityOperation(() => {
     if (probe.status !== "available") {
       throw new GitHubIdentityError(probe.status);
@@ -531,10 +545,11 @@ async function prepareSharedGitHubIdentity(
     const prepared: PreparedGitHubPublicationIdentity = Object.freeze({
       source: identity.source,
       ...(managed ? { profileId: identity.config.profileId } : {}),
+      host,
       account: probe.account,
       // Broker children and worker launches receive this fixed snapshot. Profile
       // retirement cannot redirect an already-admitted operation.
-      env: Object.freeze({ ...env, GH_TOKEN: token, GITHUB_TOKEN: undefined }),
+      env: Object.freeze(withGitHubToken(env, token)),
     });
     return { prepared, token, readToken };
   }, params);

@@ -7,6 +7,7 @@ import {
   upsertPresence,
 } from "../../infra/system-presence.js";
 import { buildAuthenticatedPresenceUser } from "../authenticated-presence-user.js";
+import { createAuthenticatedControlUiPresenceProjection } from "./client-human-presence.js";
 import {
   recordClientPresenceActivity,
   refreshClientPresence,
@@ -128,6 +129,34 @@ describe("live person presence timing", () => {
   function row(email: string) {
     return listSystemPresence().find((entry) => entry.user?.email === email);
   }
+
+  it("projects only authenticated Control UI connections as human pool demand", async () => {
+    const changes = vi.fn<(present: boolean) => void>();
+    const projection = createAuthenticatedControlUiPresenceProjection(clients, changes);
+    const browser = await connect("person@presence.test", "presence-person");
+    expect(browser.handler.setClient(browser.client)).toBe(true);
+    expect(changes).not.toHaveBeenCalled();
+
+    browser.client.internal = { authenticatedControlUi: true };
+    browser.socket.readyState = 3;
+    browser.socket.emit("close", 1000, Buffer.alloc(0));
+
+    const readOnly = await connect("person@presence.test", "presence-person");
+    readOnly.client.internal = { authenticatedControlUi: true };
+    readOnly.client.connect.scopes = ["operator.read"];
+    expect(readOnly.handler.setClient(readOnly.client)).toBe(true);
+    expect(changes).not.toHaveBeenCalled();
+
+    const verified = await connect("person@presence.test", "presence-person");
+    verified.client.internal = { authenticatedControlUi: true };
+    verified.client.connect.scopes = ["operator.sessions.write"];
+    expect(verified.handler.setClient(verified.client)).toBe(true);
+    expect(changes).toHaveBeenLastCalledWith(true);
+    verified.socket.readyState = 3;
+    verified.socket.emit("close", 1000, Buffer.alloc(0));
+    expect(changes).toHaveBeenLastCalledWith(false);
+    projection.stop();
+  });
 
   it("shares the owner's online interval and activity across tabs without an email", async () => {
     const first = await connect(undefined, "timing-owner");

@@ -61,6 +61,7 @@ import { isPlacementTurnClaimCommand } from "../gateway/worker-environments/plac
 import { executePlacementTurnClaimCommand } from "../gateway/worker-environments/placement-turn-claims.worker.js";
 import { isWorkspaceJournalWriteCommand } from "../gateway/worker-environments/placement-workspace-journal.worker-contract.js";
 import { executeWorkspaceJournalCommand } from "../gateway/worker-environments/placement-workspace-journal.worker.js";
+import { executePreparedPoolPresenceCommand } from "../gateway/worker-environments/prepared-pool-presence-runtime.js";
 import { isWorkerEnvironmentCommand } from "../gateway/worker-environments/store-worker-contract.js";
 import { executeWorkerEnvironmentCommand } from "../gateway/worker-environments/store.worker.js";
 import {
@@ -378,6 +379,13 @@ export function executeSharedStateCommand(
     return executeOnboardingRecommendationCommand(command, {
       database: open(),
       ...stateOptions(),
+    });
+  }
+  if (command.type === "preparedPoolPresence.write") {
+    return executePreparedPoolPresenceCommand({
+      command,
+      database: open(),
+      env: getSqliteWorkerStateContext().environment,
     });
   }
   if (command.type === "userPreferences.read" || command.type === "userPreferences.write") {

@@ -108,6 +108,10 @@ setPhase("preparation");
   const setupFile = path.join(stateDir, "setup-code");
   const runtimeLink = path.join(stateDir, "runtime");
   const nodeEnv = { ...process.env, ...(mode ? { OPENCLAW_STATE_DIR: stateDir } : {}) };
+  // Tools travel inside the verified full-node artifact and share its preparation identity.
+  if (process.platform !== "win32") {
+    nodeEnv.PATH = path.join(runtimeDir, "node_modules", "openclaw", "dist", "worker-tools", "bin") + path.delimiter + (nodeEnv.PATH || "");
+  }
   const finishDesktopSetup = () => {
     if (!desktopSetup) return;
     setPhase("desktop setup");

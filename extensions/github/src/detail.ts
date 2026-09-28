@@ -5,7 +5,8 @@ import { fetchPullChecks } from "./detail-checks.js";
 import {
   ControlUiGitHubError,
   fetchGitHubApi,
-  GITHUB_API_ORIGIN,
+  GITHUB_API_BASE_URL,
+  githubRestApiPath,
   githubApiCredentialCacheScope,
   isRecord,
   optionalNumber,
@@ -60,11 +61,13 @@ class GitHubDetailAccessError extends ControlUiGitHubError {
 }
 
 function redirectedRepositoryUrl(url: URL, suffix: string): string {
-  const match = /^(\/repos\/[^/]+\/[^/]+|\/repositories\/\d+)(\/.*)?$/u.exec(url.pathname);
+  const match = /^(\/repos\/[^/]+\/[^/]+|\/repositories\/\d+)(\/.*)?$/u.exec(
+    githubRestApiPath(url),
+  );
   if (!match || (match[2] ?? "") !== suffix) {
     throw new GitHubDetailAccessError();
   }
-  return GITHUB_API_ORIGIN + match[1];
+  return GITHUB_API_BASE_URL + match[1];
 }
 
 async function readPublicRepository(
@@ -256,7 +259,7 @@ async function fetchDetail(
   readPage: ReadDetailPage,
 ): Promise<GitHubDocument> {
   const repoPath = `/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}`;
-  const repositoryUrl = GITHUB_API_ORIGIN + repoPath;
+  const repositoryUrl = GITHUB_API_BASE_URL + repoPath;
   const collection =
     target.kind === "commit" ? "commits" : target.kind === "pull" ? "pulls" : "issues";
   const id = target.kind === "commit" ? target.sha : target.number;
@@ -429,7 +432,7 @@ async function loadGitHubDetailWithIdentity(
   }
   detailCache.delete(key);
   const load = async (): Promise<CachedDocument> => {
-    const repositoryUrl = `${GITHUB_API_ORIGIN}/repos/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`;
+    const repositoryUrl = `${GITHUB_API_BASE_URL}/repos/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`;
     const repositoryUrls = new Set([repositoryUrl]);
     const repositoryId = identity?.token
       ? await readPublicRepository(repositoryUrl, fetchImpl, identity)

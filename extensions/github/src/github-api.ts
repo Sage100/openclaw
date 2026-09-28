@@ -11,7 +11,46 @@ import {
 
 export { isRecord } from "openclaw/plugin-sdk/string-coerce-runtime";
 
-export const GITHUB_API_ORIGIN = "https://api.github.com";
+const DEFAULT_GITHUB_API_BASE_URL = "https://api.github.com";
+// Shipped public constant names the default service, independent of the selected Enterprise API.
+export const GITHUB_API_ORIGIN = DEFAULT_GITHUB_API_BASE_URL;
+
+function resolveGitHubApiBaseUrl(value: string | undefined): string {
+  const raw = value?.trim() || DEFAULT_GITHUB_API_BASE_URL;
+  const parsed = new URL(raw);
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash ||
+    !["/", "", "/api/v3", "/api/v3/"].includes(parsed.pathname)
+  ) {
+    throw new Error("gateway.github.apiBaseUrl must be an HTTPS GitHub API base URL");
+  }
+  return parsed.origin + (parsed.pathname.startsWith("/api/v3") ? "/api/v3" : "");
+}
+
+export let GITHUB_API_BASE_URL = resolveGitHubApiBaseUrl(undefined);
+export let GITHUB_GRAPHQL_URL = GITHUB_API_BASE_URL.endsWith("/api/v3")
+  ? `${GITHUB_API_BASE_URL.slice(0, -3)}/graphql`
+  : `${GITHUB_API_BASE_URL}/graphql`;
+
+export function configureGitHubApi(apiBaseUrl: string | undefined): void {
+  GITHUB_API_BASE_URL = resolveGitHubApiBaseUrl(apiBaseUrl);
+  GITHUB_GRAPHQL_URL = GITHUB_API_BASE_URL.endsWith("/api/v3")
+    ? `${GITHUB_API_BASE_URL.slice(0, -3)}/graphql`
+    : `${GITHUB_API_BASE_URL}/graphql`;
+}
+
+export function getConfiguredGitHubApiUrls() {
+  return { baseUrl: GITHUB_API_BASE_URL, graphqlUrl: GITHUB_GRAPHQL_URL };
+}
+
+export function githubRestApiPath(url: URL): string {
+  const basePath = new URL(GITHUB_API_BASE_URL).pathname;
+  return url.pathname.slice(basePath === "/" ? 0 : basePath.length);
+}
 const GITHUB_JSON_MAX_BYTES = 256 * 1024;
 export const GITHUB_REQUEST_TIMEOUT_MS = 8_000;
 const GITHUB_API_VERSION = "2022-11-28";
@@ -145,11 +184,12 @@ export function optionalNumber(record: Record<string, unknown>, key: string): nu
 
 function githubApiResource(url: URL): string {
   // GitHub separates GraphQL, code search, other searches, and non-search REST.
-  return url.pathname === "/graphql"
+  const path = githubRestApiPath(url);
+  return url.href === GITHUB_GRAPHQL_URL
     ? "graphql"
-    : url.pathname === "/search/code"
+    : path === "/search/code"
       ? "code_search"
-      : url.pathname.startsWith("/search/")
+      : path.startsWith("/search/")
         ? "search"
         : "core";
 }
@@ -208,7 +248,14 @@ function isGitHubApiRedirect(status: number): boolean {
 function safeGitHubApiUrl(raw: string, base?: URL): URL | null {
   try {
     const url = new URL(raw, base);
-    if (url.origin !== GITHUB_API_ORIGIN || url.username || url.password || url.port) {
+    const apiBase = new URL(GITHUB_API_BASE_URL);
+    if (
+      url.origin !== apiBase.origin ||
+      url.username ||
+      url.password ||
+      (url.href !== GITHUB_GRAPHQL_URL &&
+        !url.pathname.startsWith(`${apiBase.pathname === "/" ? "" : apiBase.pathname}/`))
+    ) {
       return null;
     }
     return url;
@@ -232,7 +279,7 @@ export async function fetchGitHubApi(
   if (!initialUrl) {
     throw new ControlUiGitHubError(502, "Invalid GitHub API URL");
   }
-  if (graphql && (initialUrl.href !== `${GITHUB_API_ORIGIN}/graphql` || !token || etag)) {
+  if (graphql && (initialUrl.href !== GITHUB_GRAPHQL_URL || !token || etag)) {
     throw new ControlUiGitHubError(502, "Invalid authenticated GitHub GraphQL request");
   }
   let url: URL = initialUrl;

@@ -1,6 +1,7 @@
 import { normalizeAgentIdStrict } from "@openclaw/normalization-core/agent-id";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { z } from "zod";
+import { resolveGitHubHost } from "../../agents/github-host-runtime.js";
 import { MANAGED_GITHUB_PROFILE_ID_PATTERN } from "../../config/github-identity-profile-id.js";
 import { parseProjectGitUrl } from "../../projects/project-git-url.js";
 
@@ -52,10 +53,7 @@ const RepositoryProject = z.object({
   source: z
     .object({
       kind: z.literal("repository"),
-      url: z
-        .string()
-        .max(2048)
-        .refine((value) => parseProjectGitUrl(value)?.url === value),
+      url: z.string().max(2048),
       repositoryId: z
         .string()
         .min(1)
@@ -71,6 +69,7 @@ export type RepositoryWorkerProjectSnapshot = z.infer<typeof RepositoryProject>;
 /** Repository facts persist; current visibility and access remain admission checks. */
 export function readRepositoryWorkerProjectSnapshot(
   value: unknown,
+  githubHost = resolveGitHubHost(),
 ): RepositoryWorkerProjectSnapshot | undefined {
   if (!isRecord(value) || value.source === undefined) {
     return undefined;
@@ -80,7 +79,8 @@ export function readRepositoryWorkerProjectSnapshot(
     Object.keys(value).some(
       (key) => !["key", "baseCommit", "source", "preparation"].includes(key),
     ) ||
-    !parsed.success
+    !parsed.success ||
+    parseProjectGitUrl(parsed.data.source.url, githubHost)?.url !== parsed.data.source.url
   ) {
     throw new Error("Worker environment has an invalid repository preparation snapshot");
   }

@@ -49,6 +49,7 @@ import {
 import { readWorkerPlacementChangeSnapshotInDatabase } from "../gateway/worker-environments/placement-row-codec.js";
 import { readWorkspaceJournalInDatabase } from "../gateway/worker-environments/placement-workspace-journal.js";
 import { isWorkspaceJournalReadCommand } from "../gateway/worker-environments/placement-workspace-journal.worker-contract.js";
+import { readPreparedPoolPresenceDemandInDatabase } from "../gateway/worker-environments/prepared-pool-presence-store.js";
 import {
   readWorkerEnvironmentFacts,
   readWorkerEnvironmentPrunePage,
@@ -456,6 +457,9 @@ serveOwnedWorkerTasks(
                 type: command.type,
                 row: readExecApprovalsConfigRow(db),
               };
+            }
+            if (command.type === "preparedPoolPresence.read") {
+              return { type: command.type, demand: readPreparedPoolPresenceDemandInDatabase(db) };
             }
             if (command.type === "workerEnvironments.snapshot") {
               return {

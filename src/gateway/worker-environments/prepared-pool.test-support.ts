@@ -128,12 +128,14 @@ export function usePreparedPoolFixture() {
       purpose?: "reserve" | "build";
       runSetupScript?: boolean;
       repository?: RepositoryWorkerProjectSnapshot;
+      profileId?: string;
+      expiresAtMs?: number;
     } = {},
   ) {
     return store.createIntent({
       environmentId,
       providerId: provider.id,
-      profileId: "development",
+      profileId: options.profileId ?? "development",
       provisionOperationId: `provision:${environmentId}`,
       profileSnapshot: profile(
         options.projectKey,
@@ -147,7 +149,7 @@ export function usePreparedPoolFixture() {
               purpose: options.purpose ?? "reserve",
               key: options.preparationKey ?? PREPARATION_KEY,
               demandAtMs: nowMs,
-              expiresAtMs: nowMs + IDLE_TIMEOUT_MS,
+              expiresAtMs: options.expiresAtMs ?? nowMs + IDLE_TIMEOUT_MS,
             }
           : undefined,
     });

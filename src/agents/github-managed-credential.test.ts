@@ -106,7 +106,11 @@ describe("managed credential isolation", () => {
       expect(child.GH_TOKEN).toBe(
         scope === "native" ? "synthetic-native-before" : "synthetic-managed-before",
       );
+      expect(child.GH_ENTERPRISE_TOKEN).toBe(
+        scope === "native" ? "synthetic-native-before" : "synthetic-managed-before",
+      );
       expect(child.GITHUB_TOKEN).toBeUndefined();
+      expect(child.GITHUB_ENTERPRISE_TOKEN).toBeUndefined();
       const ordinary = prepareGitHubToolEnvironment({ config, agentId: "main" });
       expect(JSON.stringify(ordinary)).not.toContain("synthetic-");
       if (scope === "system" || scope === "agent") {

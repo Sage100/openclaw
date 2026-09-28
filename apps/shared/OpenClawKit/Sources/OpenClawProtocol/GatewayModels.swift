@@ -12690,6 +12690,32 @@ public struct ProjectCloneErrorDetails: Codable, Sendable {
     }
 }
 
+public struct ProjectDefaultRepository: Codable, Sendable {
+    public let identity: String
+    public let url: String
+    public let ref: String?
+    public let profileid: String?
+
+    public init(
+        identity: String,
+        url: String,
+        ref: String? = nil,
+        profileid: String? = nil)
+    {
+        self.identity = identity
+        self.url = url
+        self.ref = ref
+        self.profileid = profileid
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case identity
+        case url
+        case ref
+        case profileid = "profileId"
+    }
+}
+
 public struct ProjectRecentFolder: Codable, Sendable {
     public let kind: String
     public let folder: String
@@ -12866,21 +12892,25 @@ public struct ProjectsListParams: Codable, Sendable {
 
 public struct ProjectsListResult: Codable, Sendable {
     public let projects: [ProjectsAddResult]
+    public let defaultrepository: ProjectDefaultRepository?
     public let recents: [ProjectRecent]?
     public let observedprojects: [ProjectSummary]?
 
     public init(
         projects: [ProjectsAddResult],
+        defaultrepository: ProjectDefaultRepository? = nil,
         recents: [ProjectRecent]? = nil,
         observedprojects: [ProjectSummary]? = nil)
     {
         self.projects = projects
+        self.defaultrepository = defaultrepository
         self.recents = recents
         self.observedprojects = observedprojects
     }
 
     private enum CodingKeys: String, CodingKey {
         case projects
+        case defaultrepository = "defaultRepository"
         case recents
         case observedprojects = "observedProjects"
     }
@@ -13377,6 +13407,7 @@ public struct RemoteProject: Codable, Sendable {
     public let description: String?
     public let cloneurl: String
     public let weburl: String
+    public let defaultbranch: String?
     public let _private: Bool
 
     public init(
@@ -13385,6 +13416,7 @@ public struct RemoteProject: Codable, Sendable {
         description: String? = nil,
         cloneurl: String,
         weburl: String,
+        defaultbranch: String? = nil,
         _private: Bool)
     {
         self.name = name
@@ -13392,6 +13424,7 @@ public struct RemoteProject: Codable, Sendable {
         self.description = description
         self.cloneurl = cloneurl
         self.weburl = weburl
+        self.defaultbranch = defaultbranch
         self._private = _private
     }
 
@@ -13401,6 +13434,7 @@ public struct RemoteProject: Codable, Sendable {
         case description
         case cloneurl = "cloneUrl"
         case weburl = "webUrl"
+        case defaultbranch = "defaultBranch"
         case _private = "private"
     }
 }

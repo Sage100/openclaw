@@ -179,6 +179,7 @@ data class WorkerDesktopLaunchResult(
 @Serializable
 data class ProjectsListResult(
   val projects: List<ProjectsListResultProjectsItem>,
+  val defaultRepository: ProjectsListResultDefaultRepository? = null,
   val recents: List<JsonElement>? = null,
   val observedProjects: List<ProjectsListResultObservedProjectsItem>? = null,
 )
@@ -391,6 +392,14 @@ data class ProjectsListResultProjectsItem(
   val originUrl: String? = null,
   val source: String,
   val agentId: String? = null,
+)
+
+@Serializable
+data class ProjectsListResultDefaultRepository(
+  val identity: String,
+  val url: String,
+  val ref: String? = null,
+  val profileId: String? = null,
 )
 
 @Serializable
