@@ -9,6 +9,8 @@ import { createDeferredCore } from "../shared/deferred.js";
 import { truncateUtf16Safe } from "../utils.js";
 import { createTranscriptCaptureAppends } from "./capture-appends.js";
 import {
+  activeSessions,
+  startingSessions,
   assertTranscriptCaptureEnabled,
   createStartupAbortScope,
   TranscriptStartError,
@@ -58,7 +60,7 @@ export type TranscriptsRuntimeContext = {
   logger: TranscriptsLogger;
 };
 
-type ActiveTranscriptsSession = {
+export type ActiveTranscriptsSession = {
   appends: ReturnType<typeof createTranscriptCaptureAppends>;
   directCapture?: { stateDir: string; drain: () => Promise<void> };
   abortStartup?: () => void;
@@ -87,9 +89,6 @@ type ActiveTranscriptsSession = {
     released: Promise<Awaited<ReturnType<typeof persistTranscriptSummary>>>;
   };
 };
-
-// Process-local ownership shared by tool-driven and configured transcript captures.
-export const activeSessions = new Map<string, ActiveTranscriptsSession>();
 
 export type TranscriptCaptureSelection = {
   session: TranscriptSessionDescriptor;
@@ -158,10 +157,6 @@ export function isTranscriptSessionActive(
           capture.sessionId === session.sessionId && capture.startedAt === session.startedAt,
       );
 }
-// Reserve ids across async provider startup so overlapping starts cannot
-// replace the only cleanup owner for an existing or still-starting capture.
-export const startingSessions = new Map<string, ActiveTranscriptsSession>();
-
 export function isTranscriptSessionStarting(sessionId: string): boolean {
   return startingSessions.has(sessionId);
 }
@@ -206,6 +201,7 @@ export function finalizeTranscriptCapture(params: {
       return await persistTranscriptSummary({
         config: resolveTranscriptsConfig(params.ctx.config?.transcripts),
         cfg: params.ctx.config,
+        stateDir: params.ctx.stateDir,
         store: params.store,
         session: entry.session,
         assertCurrent,
@@ -556,6 +552,7 @@ export async function startTranscripts(params: {
       entry.summaryUpdates = await createTranscriptSummaryUpdates({
         config: resolveTranscriptsConfig(params.ctx.config?.transcripts),
         cfg: params.ctx.config,
+        stateDir: params.ctx.stateDir,
         store: params.store,
         session,
         logger: params.ctx.logger,

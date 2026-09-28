@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 it.each([false, true])(
-  "joins transcript shutdown failures and keeps the exact Gateway fenced (configured: %s)",
+  "joins shutdown and keeps the Gateway fenced after capture chunks disappear (configured: %s)",
   async (configured) => {
     const started = createDeferred();
     const manualStopped = createDeferred();

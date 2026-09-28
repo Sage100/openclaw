@@ -9,7 +9,8 @@ import {
   closeOpenClawStateDatabaseAsync,
   closeOpenClawStateDatabaseForTest,
 } from "../../state/openclaw-state-db.js";
-import { activeSessions, startTranscripts } from "../../transcripts/capture.js";
+import { activeSessions } from "../../transcripts/capture-startup.js";
+import { startTranscripts } from "../../transcripts/capture.js";
 import { clearTranscriptCapturesForTest } from "../../transcripts/capture.test-support.js";
 import type {
   TranscriptSourceProvider,

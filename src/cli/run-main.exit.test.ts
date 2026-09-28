@@ -328,7 +328,11 @@ vi.mock("../agents/harness/registry.js", () => ({
 }));
 
 vi.mock("../agents/provider-runtime-lifecycle.js", () => ({
-  hasManagedProviderLocalServices: hasManagedProviderLocalServicesMock,
+  stopActiveManagedProviderLocalServices: async () => {
+    if (hasManagedProviderLocalServicesMock()) {
+      await stopManagedProviderLocalServicesMock();
+    }
+  },
   hasProviderTransportDispatcherPool: hasProviderTransportDispatcherPoolMock,
 }));
 

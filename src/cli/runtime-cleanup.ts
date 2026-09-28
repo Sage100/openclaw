@@ -1,3 +1,4 @@
+import { stopActiveManagedProviderLocalServices } from "../agents/provider-runtime-lifecycle.js";
 import { finalizeActiveDebugProxyCaptures } from "../proxy-capture/runtime-cleanup.js";
 import type { CliHarnessCleanup } from "./runtime-cleanup-scope.js";
 
@@ -81,15 +82,7 @@ export async function closeCliResources(cleanup?: CliHarnessCleanup): Promise<vo
         cleanup.registries.clear();
       }
     },
-    "provider-local-services": async () => {
-      const { hasManagedProviderLocalServices } =
-        await import("../agents/provider-runtime-lifecycle.js");
-      if (hasManagedProviderLocalServices()) {
-        const { stopManagedProviderLocalServices } =
-          await import("../agents/provider-local-service.js");
-        await stopManagedProviderLocalServices();
-      }
-    },
+    "provider-local-services": stopActiveManagedProviderLocalServices,
     "provider-transport-dispatchers": async () => {
       const { hasProviderTransportDispatcherPool } =
         await import("../agents/provider-runtime-lifecycle.js");
