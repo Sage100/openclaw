@@ -127,7 +127,6 @@ const runtimeConsumers = [
     dir: "src",
   },
   ...[
-    "src/agents/agent-command-local.test.ts",
     "src/agents/simple-completion-runtime.plugin-scope.test.ts",
     "src/agents/prepared-model-catalog-worker.custody.integration.test.ts",
     "src/agents/prepared-model-catalog-worker.integration.test.ts",
@@ -223,6 +222,7 @@ const runtimeConsumers = [
     dir: "extensions",
   },
   ...[
+    "src/agents/agent-command-local.test.ts",
     "src/cli/acp-cli-exit.process.test.ts",
     "src/cli/update-dry-run-state.process.test.ts",
     "src/cli/update-cli/update-command-migrated.test.ts",

@@ -50,6 +50,7 @@ import { withEnv } from "../../src/test-utils/env.js";
 import { listGitTrackedFiles, toRepoPath } from "../../src/test-utils/repo-files.js";
 import { listVitestConfigTestFiles } from "../vitest-projects-config.test-support.js";
 import { agentVitestProjectOwners } from "../vitest/vitest.agents-paths.mjs";
+import { cliProcessTestFiles } from "../vitest/vitest.cli-process-paths.mjs";
 import { databaseWorkerCoreTestFiles } from "../vitest/vitest.database-worker-core-paths.mjs";
 import { databaseWorkerExtensionTestFiles } from "../vitest/vitest.extension-database-workers-paths.mjs";
 import {
@@ -3047,6 +3048,12 @@ describe("scripts/test-projects changed-target routing", () => {
         includePatterns: databaseWorkerCoreTestFiles.filter((file) =>
           file.startsWith("src/agents/"),
         ),
+        watchMode: false,
+      },
+      {
+        config: "test/vitest/vitest.cli-process.config.ts",
+        forwardedArgs: [],
+        includePatterns: cliProcessTestFiles.filter((file) => file.startsWith("src/agents/")),
         watchMode: false,
       },
       {

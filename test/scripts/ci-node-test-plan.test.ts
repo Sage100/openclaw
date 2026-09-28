@@ -6770,7 +6770,6 @@ describe("scripts/lib/ci-node-test-plan.mts", () => {
         configs: ["test/vitest/vitest.agents-core.config.ts"],
         includePatterns: agentShards[7]?.includePatterns,
         requiresDist: false,
-        pretestBuildMode: "runtime",
         runner: DEFAULT_NODE_TEST_RUNNER,
         shardName: "agentic-agents-core-runner-commands",
       },
@@ -6938,8 +6937,14 @@ describe("scripts/lib/ci-node-test-plan.mts", () => {
       .filter((file) => !databaseWorkerCoreTestFiles.includes(file))
       .toSorted((a, b) => a.localeCompare(b));
 
-    expect(actual).toEqual(expected);
+    expect(actual).toEqual(expected.filter((file) => !cliProcessTestFiles.includes(file)));
     expect(new Set(actual).size).toBe(actual.length);
+    const cliAgentFiles = listMatchedTestFiles(createCliProcessVitestConfig({})).filter((file) =>
+      file.startsWith("src/agents/"),
+    );
+    const allAgentFiles = [...actual, ...cliAgentFiles].toSorted((a, b) => a.localeCompare(b));
+    expect(allAgentFiles).toEqual(expected);
+    expect(new Set(allAgentFiles).size).toBe(allAgentFiles.length);
   });
 
   it("keeps embedded-agent tests in four bounded config surfaces", () => {
