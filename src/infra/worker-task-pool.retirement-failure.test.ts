@@ -13,6 +13,7 @@ type FakeWorker = EventEmitter & {
 };
 const workers = vi.hoisted(() => [] as FakeWorker[]);
 const cleanup = vi.hoisted(() => vi.fn<() => Promise<void>>());
+const taskPosted = vi.hoisted(() => vi.fn());
 
 vi.mock("node:worker_threads", async (importOriginal) => {
   const { EventEmitter } = await import("node:events");
@@ -24,7 +25,9 @@ vi.mock("node:worker_threads", async (importOriginal) => {
         super();
         workers.push(this);
       }
-      postMessage = vi.fn<(message: { taskId: number; responseId?: number }) => void>();
+      postMessage = vi.fn<(message: { taskId: number; responseId?: number }) => void>(() => {
+        taskPosted();
+      });
       ref() {}
       unref() {}
       terminate = vi.fn(async () => {
@@ -61,6 +64,7 @@ function taskId(worker: FakeWorker) {
 beforeEach(() => {
   workers.splice(0);
   cleanup.mockReset().mockResolvedValue();
+  taskPosted.mockReset();
 });
 afterEach(async () => {
   await Promise.all(pools.splice(0).map((pool) => pool.close()));
@@ -70,6 +74,13 @@ describe("worker task retirement failures", () => {
   it.each([false, true])(
     "joins every retirement retry and its artifacts before rejecting (second retry fails: %s)",
     async (secondRetryFails) => {
+      const admitted = createDeferredCore();
+      let pendingAdmissions = 2;
+      taskPosted.mockImplementation(() => {
+        if (--pendingAdmissions === 0) {
+          admitted.resolve();
+        }
+      });
       const pool = new WorkerTaskPool<string, string>({
         workerUrl: new URL("data:text/javascript,"),
         maxWorkers: 2,
@@ -87,6 +98,8 @@ describe("worker task retirement failures", () => {
           .run(`input-${index}`, { signal: controller.signal, onInputConsumed: released[index] })
           .catch((error: unknown) => error),
       );
+      await admitted.promise;
+      expect(workers).toHaveLength(2);
       for (const [index, worker] of workers.entries()) {
         worker.terminate.mockRejectedValueOnce(new Error("initial exit uncertain"));
         controllers[index]!.abort(new Error("task canceled"));

@@ -380,11 +380,8 @@ vi.mock("../../logging/diagnostic-stability-bundle.js", () => ({
 }));
 
 vi.mock("../../agents/provider-runtime-lifecycle.js", () => ({
-  stopActiveManagedProviderLocalServices: async () => {
-    if (hasManagedProviderLocalServices()) {
-      await stopManagedProviderLocalServices();
-    }
-  },
+  stopActiveManagedProviderLocalServices: async () =>
+    hasManagedProviderLocalServices() ? stopManagedProviderLocalServices() : undefined,
 }));
 
 vi.mock("../../gateway/server-reload-generation.js", () => ({

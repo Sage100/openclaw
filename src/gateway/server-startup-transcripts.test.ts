@@ -4,9 +4,9 @@ import { createDeferred } from "../../test/helpers/promise.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { createEmptyPluginRegistry } from "../plugins/registry-empty.js";
 import { resetGatewayWorkAdmission } from "../process/gateway-work-admission.js";
-import { scheduleTranscriptsSidecar } from "./server-startup-transcripts.js";
 import { transcriptSidecarMocks as mocks } from "./server-startup-transcripts.test-support.js";
 
+const { scheduleTranscriptsSidecar } = await import("./server-startup-transcripts.js");
 const stateDir = path.resolve("synthetic-transcript-sidecar");
 
 beforeEach(() => {

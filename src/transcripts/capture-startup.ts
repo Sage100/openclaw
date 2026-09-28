@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import type { ActiveTranscriptsSession } from "./capture.js";
+import type { ActiveTranscriptsSession } from "./capture-types.js";
 import type { TranscriptSessionDescriptor } from "./provider-types.js";
 
 export class TranscriptStartError extends Error {

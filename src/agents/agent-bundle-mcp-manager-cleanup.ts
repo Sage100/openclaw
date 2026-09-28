@@ -1,5 +1,5 @@
-import { logWarn } from "../logger.js";
 /** Cleanup consumes the existing manager without loading its construction graph. */
+import { logWarn } from "../logger.js";
 import type { createSessionMcpRuntimeManager } from "./agent-bundle-mcp-manager.js";
 import { SESSION_MCP_RUNTIME_MANAGER_KEY } from "./agent-bundle-mcp-runtime-shared.js";
 import type { SessionMcpRuntime, SessionMcpRuntimeLease } from "./agent-bundle-mcp-types.js";
@@ -7,12 +7,15 @@ import type { SessionMcpRuntime, SessionMcpRuntimeLease } from "./agent-bundle-m
 export function peekSessionMcpRuntimeManager():
   | ReturnType<typeof createSessionMcpRuntimeManager>
   | undefined {
+  // SAFETY: resolveGlobalSingleton stores symbol-keyed values on this same global object.
   const globalStore = globalThis as Record<PropertyKey, unknown>;
-  return Object.hasOwn(globalStore, SESSION_MCP_RUNTIME_MANAGER_KEY)
-    ? (globalStore[SESSION_MCP_RUNTIME_MANAGER_KEY] as ReturnType<
-        typeof createSessionMcpRuntimeManager
-      >)
-    : undefined;
+  if (!Object.hasOwn(globalStore, SESSION_MCP_RUNTIME_MANAGER_KEY)) {
+    return undefined;
+  }
+  // SAFETY: the manager API assigns only createSessionMcpRuntimeManager() to this key.
+  return globalStore[SESSION_MCP_RUNTIME_MANAGER_KEY] as ReturnType<
+    typeof createSessionMcpRuntimeManager
+  >;
 }
 
 /** Releases an acquisition after its consumer has taken ownership, or after failure. */
