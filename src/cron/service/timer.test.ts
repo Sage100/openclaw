@@ -370,6 +370,7 @@ describe("cron service timer seam coverage", () => {
 
     expect(result).toMatchObject({ status: "ok", summary: "command ok" });
     expect(runCommandJob).toHaveBeenCalledWith({
+      deliveryAttemptFence: null,
       job,
       abortSignal: undefined,
     });
