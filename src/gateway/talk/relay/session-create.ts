@@ -106,6 +106,12 @@ export function createTalkRealtimeRelaySession(
       ...event,
       ...(talkEvent ? { talkEvent: harness.emit(talkEvent) } : {}),
     });
+  const emitSessionIssue = (issue: ReturnType<typeof realtimeRelayIssue>) =>
+    emit(relayIssuePayload(relaySessionId, issue), {
+      type: "session.error",
+      payload: issue,
+      final: true,
+    });
   let currentOutputItemId: string | undefined;
   let playbackTurnId: string | undefined;
   let ready = false;
@@ -559,11 +565,7 @@ export function createTalkRealtimeRelaySession(
         phase: ready ? "stream" : "connect",
       });
       failureEmitted = true;
-      emit(relayIssuePayload(relaySessionId, issue), {
-        type: "session.error",
-        payload: issue,
-        final: true,
-      });
+      emitSessionIssue(issue);
     },
     onClose: (reason) => {
       void runControl.close();
@@ -579,11 +581,7 @@ export function createTalkRealtimeRelaySession(
           model: publicModel,
           phase: "connect",
         });
-        emit(relayIssuePayload(relaySessionId, issue), {
-          type: "session.error",
-          payload: issue,
-          final: true,
-        });
+        emitSessionIssue(issue);
       }
       void closeRelaySession(active, reason);
     },
@@ -691,11 +689,7 @@ export function createTalkRealtimeRelaySession(
       phase: "connect",
     });
     failureEmitted = true;
-    emit(relayIssuePayload(relaySessionId, issue), {
-      type: "session.error",
-      payload: issue,
-      final: true,
-    });
+    emitSessionIssue(issue);
     void closeRelaySession(active, "error");
   });
 

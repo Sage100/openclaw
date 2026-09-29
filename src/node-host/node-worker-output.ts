@@ -2,6 +2,7 @@ import { formatErrorMessage } from "../infra/errors.js";
 import { redactToolPayloadText } from "../logging/redact.js";
 import { redactRegisteredSecretValues } from "../logging/secret-redaction-registry.js";
 import { truncateUtf8Suffix } from "../utils/utf8-truncate.js";
+import type { WorkerLaunchDescriptor } from "../worker/launch-descriptor.js";
 
 export const NODE_WORKER_STDOUT_MAX_BYTES = 64 * 1024;
 const STDERR_MAX_BYTES = 4 * 1024;
@@ -10,6 +11,16 @@ export type NodeWorkerCredentialScrubber = {
   maxRepresentationBytes: number;
   scrub: (text: string) => string;
 };
+
+export function nodeWorkerDescriptorSecrets(descriptor: WorkerLaunchDescriptor): string[] {
+  const endpoint = descriptor.connectionEndpoint;
+  const access = endpoint.kind === "websocket" ? endpoint.cloudflareAccess : undefined;
+  return [
+    descriptor.admission.credential,
+    ...(access ? [access.clientId, access.clientSecret] : []),
+    ...(descriptor.assignment.github ? [descriptor.assignment.github.token] : []),
+  ];
+}
 
 export function createNodeWorkerCredentialScrubber(
   credentials: string | readonly string[],

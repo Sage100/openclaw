@@ -1,21 +1,26 @@
 import type { NodeWorkerCapacitySnapshot } from "../infra/node-runner-inventory.js";
 import { createDeferredCore } from "../shared/deferred.js";
+import type { WorkerLaunchDescriptor } from "../worker/launch-descriptor.js";
 import type {
   NodeWorkerEnvironmentStopInput,
   NodeWorkerLaunchInput,
   NodeWorkerSupervisorIdentity,
 } from "../worker/node-supervisor-protocol.js";
+import type { NodeWorkerCapacity } from "./node-worker-capacity.js";
 import type { NodeWorkerContainerEngine } from "./node-worker-container-engine.js";
+import type { NodeWorkerContainerLifecycle } from "./node-worker-container-lifecycle.js";
 import type { NodeWorkerTerminalOutcome } from "./node-worker-launch-observation.js";
 import type {
   NodeWorkerContainerIdentity,
   NodeWorkerLaunchClaim,
   NodeWorkerLaunchReceipt,
+  NodeWorkerLaunchStore,
   NodeWorkerTerminalState,
 } from "./node-worker-launch-store.js";
 import type { NodeWorkerChildAdapter } from "./node-worker-launch-transport.js";
 import type { NodeWorkerCredentialScrubber } from "./node-worker-output.js";
 import type { NodeWorkerProcessIdentity } from "./node-worker-process-identity.js";
+import type { NodeWorkerTurnStore } from "./node-worker-turn-store.js";
 import type { NodeWorkerWorkspaceRuntime } from "./node-worker-workspace.js";
 
 export type NodeWorkerStopState = Extract<NodeWorkerTerminalState, "cancelled" | "interrupted">;
@@ -141,6 +146,58 @@ export function createNodeWorkerObservedTerminal(
 }
 
 export type NodeWorkerActiveOwnership = NodeWorkerRunningChild | NodeWorkerObservedTerminal;
+
+export type NodeWorkerChildStartParams = {
+  workerEnv: NodeJS.ProcessEnv;
+  input: NodeWorkerLaunchInput;
+  descriptor: WorkerLaunchDescriptor;
+  planHash: string;
+  supervisor: NodeWorkerProcessIdentity;
+  claim: NodeWorkerLaunchClaim;
+  signal?: AbortSignal;
+  idleGeneration?: number;
+};
+
+export type NodeWorkerChildStartContext = {
+  active: Map<string, NodeWorkerActiveOwnership>;
+  bundleRoot: string;
+  capacity: Pick<NodeWorkerCapacity, "finish">;
+  containerEngine?: NodeWorkerContainerEngine;
+  containerImage?: string;
+  containerLifecycle?: NodeWorkerContainerLifecycle;
+  engineEnv: NodeJS.ProcessEnv;
+  store: NodeWorkerLaunchStore;
+  turns: Pick<NodeWorkerTurnStore, "get">;
+  isClosed(): boolean;
+  observeChild(active: NodeWorkerRunningChild): Promise<void>;
+  stopChild(active: NodeWorkerRunningChild, state?: NodeWorkerStopState): Promise<void>;
+  requireContainerLifecycle(): NodeWorkerContainerLifecycle;
+};
+
+export type NodeWorkerTurnLifecycleContext = {
+  active: ReadonlyMap<string, NodeWorkerActiveOwnership>;
+  admissions: Map<string, NodeWorkerPendingAdmission>;
+  starting: Map<string, Promise<NodeWorkerLaunchReceipt>>;
+  stoppingEnvironments: ReadonlyMap<string, number>;
+  store: Pick<NodeWorkerLaunchStore, "get">;
+  turns: Pick<NodeWorkerTurnStore, "get" | "getMatching" | "claim" | "finish">;
+  capacity: Pick<NodeWorkerCapacity, "claim" | "finish" | "setReclaimableIdle">;
+  workspace: Pick<NodeWorkerWorkspaceRuntime, "acquirePreparedWorkspace">;
+  workerEnv: NodeJS.ProcessEnv;
+  stopTimeoutMs: number;
+  isClosed(): boolean;
+  isCloseCompleted(): boolean;
+  getIdleGeneration(): number;
+  advanceIdleGeneration(): void;
+  getSupervisorIdentity(): NodeWorkerProcessIdentity;
+  initialize(): Promise<void>;
+  statusOwner(launchId: string): Promise<NodeWorkerLaunchReceipt | undefined>;
+  reconcileActiveTerminal(active: NodeWorkerObservedTerminal): Promise<NodeWorkerLaunchReceipt>;
+  recoverRunning(receipt: NodeWorkerLaunchReceipt): Promise<NodeWorkerLaunchReceipt>;
+  cancelOwner(expected: NodeWorkerSupervisorIdentity): Promise<NodeWorkerLaunchReceipt | undefined>;
+  stopChild(active: NodeWorkerRunningChild, state?: NodeWorkerStopState): Promise<void>;
+  startChild(params: NodeWorkerChildStartParams): Promise<NodeWorkerLaunchReceipt>;
+};
 
 export type NodeWorkerSupervisorOptions = {
   bundleRoot?: string;
