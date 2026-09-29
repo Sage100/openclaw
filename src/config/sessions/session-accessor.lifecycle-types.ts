@@ -1,3 +1,4 @@
+import type { SubagentRunsDurableBasis } from "../../agents/subagents/registry/subagent-registry-read.types.js";
 import type { OpenClawAgentDatabaseIdentity } from "../../state/openclaw-agent-db-identity.js";
 import type { OpenClawConfig } from "../types.openclaw.js";
 import type { ConversationRouteContext } from "./conversation-route-context.js";
@@ -11,6 +12,7 @@ export type SessionResetBoundaryWrite = SessionResetBoundaryRequest & { cwd: str
 
 export type SessionLifecycleArtifactCleanupParams = {
   agentId?: string;
+  env?: NodeJS.ProcessEnv;
   storePath: string;
   archiveRemovedEntryTranscripts?: boolean;
   /** Preserve explicitly foreign plugin-owned state while retaining ownerless legacy rows. */
@@ -83,6 +85,10 @@ export type DeleteSessionEntryLifecycleResult = {
 };
 
 export type DeleteSessionEntryLifecycleParams = {
+  /** Captured host state source; never part of the cloneable deletion plan. */
+  env?: NodeJS.ProcessEnv;
+  /** Internal durable comparison paired with the caller's live descendant guard. */
+  descendantRunBasis?: SubagentRunsDurableBasis;
   /**
    * Revalidate caller and external lifecycle owners at each synchronous deletion boundary.
    * Must not write the deleting agent database: its Worker may hold the transaction lock.

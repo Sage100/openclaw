@@ -548,9 +548,19 @@ query policies run in its consuming frame, including the paired fresh/active
 execution facts. Run draining awaits a fresh observation at each refresh, so a
 successor admitted while a wait settles is not lost. Failed or replaced read
 admission is not an empty descendant set. The obsolete internal synchronous
-descendant-list adapter is removed. The reaper/continuation deletion guards remain
-coupled to the outstanding lifecycle writer migration, not a permanent
-main-thread exception. This changes no schema, retention, or update behavior.
+descendant-list adapter is removed. This changes no schema, retention, or update behavior.
+
+Cron continuation cleanup and retention batches prepare deletion through the
+existing session reclamation worker. The host retains live descendant, media,
+and lifecycle authority; the worker compares the durable descendant rows after
+that grant and before committing. Registry preparation preserves unpublished
+intent and current live objects without treating a stale resident snapshot as
+fresh durable state. Reaper maintenance uses the existing compact subagent
+projection, with a fresh protection check at the worker commit boundary.
+The batch keeps one synchronous transaction and the existing archive,
+publication, rollback, and uncertain-outcome owners. Native harness mutation
+objects remain with their process-held owner. No cross-database atomicity,
+retention change, or new update step is introduced.
 
 Cron retention discovery uses a separate, single-worker maintenance lane within the
 same session database lifecycle owner. Foreground history and exact-entry reads
@@ -609,6 +619,23 @@ completion delivery; stored history does not supply live execution authority.
 The existing shared schema is unchanged. Cron retains its own history operations
 on the existing storage rows; removed Task projections do not regain execution
 or delivery authority.
+
+Requester wake transitions and settlement use that same worker transaction and
+registry publication owner. Timers and retries retain the original database, run,
+and wake generation through acknowledgement. A known commit keeps its existing
+wake episode until current canonical facts can be published; reconciliation reads
+those facts without repeating the data write. Outcome settlement also retains any
+committed system-event intent until the existing queue owner can finish scheduling
+it. Pending intent payloads must still match; current terminal queue receipts are
+consumed without another dispatch. An absent or replaced intent leaves the episode
+unsettled instead of recreating delivery, including when existing retention has
+removed a terminal receipt.
+
+Uncertain outcomes stay fenced. Definite failures retain the existing delivery
+failure and replay rules, and outcome-bearing settlement publishes its new
+delivery receipt. Initial requester-yield creation and requester/session reads
+remain separate worker migration work. Schema, retention, and update behavior
+are unchanged.
 
 Concurrent first opens wait for owner-record publication and a transient schema
 initializer within one database busy timeout. Incomplete records never grant
