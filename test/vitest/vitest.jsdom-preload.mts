@@ -1,13 +1,11 @@
 import { installJsdomEnvironmentAdapter } from "../jsdom-compat.mts";
 
-// Ordinary child Workers inherit this preload but do not own a Vitest environment.
-const entry = process.argv[1];
-if (
-  entry &&
-  /[/\\]vitest[/\\]dist[/\\]workers[/\\](?:forks|threads|vmForks|vmThreads)\.js$/.test(entry)
-) {
-  // Match the worker's Vitest instance, including package-local pnpm peer graphs.
-  const require = process.getBuiltinModule("module").createRequire(entry);
+// Vitest 5 starts these four packaged workers. Descendants inherit execArgv,
+// but ordinary forks/threads must not load a test runtime or alter their IPC.
+const entrypoint = process.argv[1]?.replaceAll("\\", "/");
+if (/\/vitest\/dist\/workers\/(?:forks|threads|vmForks|vmThreads)\.js$/u.test(entrypoint ?? "")) {
+  // Match the active worker's instance, including package-local pnpm peer graphs.
+  const require = process.getBuiltinModule("module").createRequire(process.argv[1]!);
   const { builtinEnvironments }: typeof import("vitest/runtime") = require("vitest/runtime");
   installJsdomEnvironmentAdapter(builtinEnvironments.jsdom);
 }

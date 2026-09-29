@@ -45,7 +45,7 @@ describe("jsdom native API boundary", () => {
               .createRequire(path.resolve("ui/package.json"))
               .resolve("vitest/package.json"),
           ),
-          "dist/workers/threads.js",
+          "dist/workers/forks.js",
         ),
       ],
       { encoding: "utf8" },

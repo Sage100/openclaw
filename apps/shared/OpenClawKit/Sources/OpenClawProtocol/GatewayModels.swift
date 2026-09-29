@@ -10311,6 +10311,7 @@ public struct PluginCatalogEntry: Codable, Sendable {
     public let error: String?
     public let runtime: PluginRuntimeStatus?
     public let categories: [String]?
+    public let capabilitycategories: [String]?
     public let category: String?
     public let removable: Bool?
 
@@ -10338,6 +10339,7 @@ public struct PluginCatalogEntry: Codable, Sendable {
         error: String? = nil,
         runtime: PluginRuntimeStatus? = nil,
         categories: [String]? = nil,
+        capabilitycategories: [String]? = nil,
         category: String? = nil,
         removable: Bool? = nil)
     {
@@ -10364,6 +10366,7 @@ public struct PluginCatalogEntry: Codable, Sendable {
         self.error = error
         self.runtime = runtime
         self.categories = categories
+        self.capabilitycategories = capabilitycategories
         self.category = category
         self.removable = removable
     }
@@ -10392,6 +10395,7 @@ public struct PluginCatalogEntry: Codable, Sendable {
         case error
         case runtime
         case categories
+        case capabilitycategories = "capabilityCategories"
         case category
         case removable
     }
@@ -11330,6 +11334,7 @@ public struct PluginsInspectResult: Codable, Sendable {
     public let ok: Bool
     public let overview: [String: AnyCodable]?
     public let credentials: [[String: AnyCodable]]?
+    public let mcpauth: [[String: AnyCodable]]?
     public let decisions: [PluginDecisionProviderStatus]?
     public let plugin: [String: AnyCodable]
     public let source: PluginInspectSource?
@@ -11344,6 +11349,7 @@ public struct PluginsInspectResult: Codable, Sendable {
         ok: Bool,
         overview: [String: AnyCodable]? = nil,
         credentials: [[String: AnyCodable]]? = nil,
+        mcpauth: [[String: AnyCodable]]? = nil,
         decisions: [PluginDecisionProviderStatus]? = nil,
         plugin: [String: AnyCodable],
         source: PluginInspectSource? = nil,
@@ -11357,6 +11363,7 @@ public struct PluginsInspectResult: Codable, Sendable {
         self.ok = ok
         self.overview = overview
         self.credentials = credentials
+        self.mcpauth = mcpauth
         self.decisions = decisions
         self.plugin = plugin
         self.source = source
@@ -11372,6 +11379,7 @@ public struct PluginsInspectResult: Codable, Sendable {
         case ok
         case overview
         case credentials
+        case mcpauth = "mcpAuth"
         case decisions
         case plugin
         case source
@@ -15147,6 +15155,32 @@ public struct SessionMembersListResult: Codable, Sendable {
     }
 }
 
+public struct SessionNarrationEvent: Codable, Sendable {
+    public let sessionkey: String
+    public let agentid: String?
+    public let runid: String
+    public let text: String
+
+    public init(
+        sessionkey: String,
+        agentid: String? = nil,
+        runid: String,
+        text: String)
+    {
+        self.sessionkey = sessionkey
+        self.agentid = agentid
+        self.runid = runid
+        self.text = text
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionkey = "sessionKey"
+        case agentid = "agentId"
+        case runid = "runId"
+        case text
+    }
+}
+
 public struct SessionObserverDigest: Codable, Sendable {
     public let sessionkey: String
     public let agentid: String?
@@ -15275,6 +15309,28 @@ public struct SessionOwner: Codable, Sendable {
         case actor
         case assignedby = "assignedBy"
         case assignedat = "assignedAt"
+    }
+}
+
+public struct SessionOwnerSessionCount: Codable, Sendable {
+    public let profileid: String
+    public let _open: Int
+    public let running: Int
+
+    public init(
+        profileid: String,
+        _open: Int,
+        running: Int)
+    {
+        self.profileid = profileid
+        self._open = _open
+        self.running = running
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case profileid = "profileId"
+        case _open = "open"
+        case running
     }
 }
 
@@ -17728,6 +17784,7 @@ public struct SessionsListParams: Codable, Sendable {
     public let profilerelation: [String: AnyCodable]?
     public let involvingprofileid: String?
     public let includepeople: Bool?
+    public let includeownersessioncounts: Bool?
     public let spawnedby: String?
     public let agentid: String?
     public let search: String?
@@ -17765,6 +17822,7 @@ public struct SessionsListParams: Codable, Sendable {
         profilerelation: [String: AnyCodable]? = nil,
         involvingprofileid: String? = nil,
         includepeople: Bool? = nil,
+        includeownersessioncounts: Bool? = nil,
         spawnedby: String? = nil,
         agentid: String? = nil,
         search: String? = nil,
@@ -17801,6 +17859,7 @@ public struct SessionsListParams: Codable, Sendable {
         self.profilerelation = profilerelation
         self.involvingprofileid = involvingprofileid
         self.includepeople = includepeople
+        self.includeownersessioncounts = includeownersessioncounts
         self.spawnedby = spawnedby
         self.agentid = agentid
         self.search = search
@@ -17839,6 +17898,7 @@ public struct SessionsListParams: Codable, Sendable {
         case profilerelation = "profileRelation"
         case involvingprofileid = "involvingProfileId"
         case includepeople = "includePeople"
+        case includeownersessioncounts = "includeOwnerSessionCounts"
         case spawnedby = "spawnedBy"
         case agentid = "agentId"
         case search
@@ -17849,21 +17909,29 @@ public struct SessionsListParams: Codable, Sendable {
 public struct SessionsMessagesSubscribeParams: Codable, Sendable {
     public let key: String
     public let agentid: String?
+    public let subscriptionid: String?
+    public let mode: String?
     public let includeapprovals: Bool?
 
     public init(
         key: String,
         agentid: String? = nil,
+        subscriptionid: String? = nil,
+        mode: String? = nil,
         includeapprovals: Bool? = nil)
     {
         self.key = key
         self.agentid = agentid
+        self.subscriptionid = subscriptionid
+        self.mode = mode
         self.includeapprovals = includeapprovals
     }
 
     private enum CodingKeys: String, CodingKey {
         case key
         case agentid = "agentId"
+        case subscriptionid = "subscriptionId"
+        case mode
         case includeapprovals = "includeApprovals"
     }
 }
@@ -17871,18 +17939,22 @@ public struct SessionsMessagesSubscribeParams: Codable, Sendable {
 public struct SessionsMessagesUnsubscribeParams: Codable, Sendable {
     public let key: String
     public let agentid: String?
+    public let subscriptionid: String?
 
     public init(
         key: String,
-        agentid: String? = nil)
+        agentid: String? = nil,
+        subscriptionid: String? = nil)
     {
         self.key = key
         self.agentid = agentid
+        self.subscriptionid = subscriptionid
     }
 
     private enum CodingKeys: String, CodingKey {
         case key
         case agentid = "agentId"
+        case subscriptionid = "subscriptionId"
     }
 }
 
@@ -25384,13 +25456,22 @@ public struct WorkerEnvironmentMetadata: Codable, Sendable {
 public struct WorkerSlotSummary: Codable, Sendable {
     public let total: Int
     public let available: Int
+    public let reclaimableidle: Int?
 
     public init(
         total: Int,
-        available: Int)
+        available: Int,
+        reclaimableidle: Int? = nil)
     {
         self.total = total
         self.available = available
+        self.reclaimableidle = reclaimableidle
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case total
+        case available
+        case reclaimableidle = "reclaimableIdle"
     }
 }
 

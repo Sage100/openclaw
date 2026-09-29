@@ -139,6 +139,25 @@ serveOwnedWorkerTasks(
       }
     }
     try {
+      if (request.kind === "prewarm") {
+        await Promise.all([
+          import("../../gateway/session-history-worker-reader.js"),
+          import("../../gateway/server-methods/chat-history-page-kernel.js"),
+          import("../../gateway/session-history-snapshot.js"),
+        ]);
+        const { withOpenClawAgentDatabaseReadOnly } =
+          await import("../../state/openclaw-agent-db-readonly.js");
+        return await withHistoryDatabase(request.database, request.kind, () => {
+          const opened = withOpenClawAgentDatabaseReadOnly(() => undefined, {
+            ...request.database,
+            env: cloneEnvWithPlatformSemantics(request.env),
+          });
+          if (!opened.found && opened.reason !== "database-missing") {
+            throw new Error(`Session history prewarm admission unavailable: ${opened.reason}`);
+          }
+          return { kind: "prewarm" as const };
+        });
+      }
       if (request.kind === "historical-eviction-candidates") {
         const { withOpenClawAgentDatabaseReadOnly } =
           await import("../../state/openclaw-agent-db-readonly.js");
@@ -180,6 +199,17 @@ serveOwnedWorkerTasks(
             pending: result.found && result.value,
           };
         });
+      }
+      if (request.kind === "session-archive-presence") {
+        const { readTranscriptArchivePresenceInWorker } =
+          await import("./session-accessor.sqlite-archive-read.js");
+        return await withHistoryDatabase(request.database, request.kind, () => ({
+          kind: "session-archive-presence" as const,
+          registered: readTranscriptArchivePresenceInWorker({
+            ...request,
+            env: cloneEnvWithPlatformSemantics(request.env),
+          }),
+        }));
       }
       if (request.kind === "session-archive-pruning") {
         const { readSessionArchivePruningInWorker } =
