@@ -849,8 +849,8 @@ describe("SqliteBoardStore persistence", () => {
 
     const result = await deleteSessionEntryLifecycle({
       agentId: "main",
-      env,
       archiveTranscript: false,
+      env,
       storePath: databasePath,
       target: { canonicalKey: sessionKey, storeKeys: [sessionKey] },
     });

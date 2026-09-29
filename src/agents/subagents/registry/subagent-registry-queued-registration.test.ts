@@ -57,8 +57,8 @@ vi.mock("../../../state/openclaw-state-worker-context.js", () => {
     },
   });
   return {
-    captureOpenClawStateReadContext: captureContext,
     captureOpenClawStateWorkerContext: captureContext,
+    captureOpenClawStateReadContext: captureContext,
   };
 });
 vi.mock("./subagent-session-reconciliation.js", () => ({

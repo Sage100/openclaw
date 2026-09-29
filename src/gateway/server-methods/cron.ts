@@ -1,4 +1,3 @@
-// Gateway RPC handlers for cron job CRUD, run logs, wake, and delivery previews.
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import {
   type CronListParams,
@@ -123,7 +122,6 @@ function cronPatchTouchesToolRuntime(patch: CronJobPatch): boolean {
   return patch.payload !== undefined || Object.hasOwn(patch, "trigger");
 }
 
-/** Gateway request handlers for cron jobs and cron run-log access. */
 export const cronHandlers: GatewayRequestHandlers = {
   wake: async ({ params, respond, context, client, sessionMutationCommitGuard }) => {
     if (!assertValidParams(params, validateWakeParams, "wake", respond)) {
@@ -379,11 +377,7 @@ export const cronHandlers: GatewayRequestHandlers = {
             tryGetLegacyDefaultAgentId(context.getRuntimeConfig()),
           ) ?? null,
       }));
-      if (p.compact === true) {
-        respond(true, { ...page, jobs }, undefined);
-        return;
-      }
-      if (p.includeDeliveryPreviews === false) {
+      if (p.compact === true || p.includeDeliveryPreviews === false) {
         // Full job rows are the default because editors need their payloads. Delivery
         // previews are independently suppressible so list-only callers avoid per-job I/O
         // without weakening the shipped full-response default.
@@ -578,11 +572,6 @@ export const cronHandlers: GatewayRequestHandlers = {
     }
     try {
       assertCronDoesNotTargetAgentHarness(jobCreate);
-    } catch (err) {
-      respondInvalidCronParams(respond, "cron.add", formatErrorMessage(err));
-      return;
-    }
-    try {
       await assertValidCronCreateDelivery(cfg, jobCreate);
     } catch (err) {
       respondInvalidCronParams(respond, "cron.add", formatErrorMessage(err));
