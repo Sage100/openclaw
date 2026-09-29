@@ -23,6 +23,7 @@ import {
 } from "../scripts/lib/plugin-npm-runtime-build.mts";
 import { resolveRuntimeWorkerThreadExecArgv } from "../src/infra/runtime-worker-url.js";
 import { defineBundledChannelSetupEntry } from "../src/plugin-sdk/channel-entry-contract.js";
+import { writePublicRuntimeSurfacePluginFixture } from "./helpers/publishable-plugin-fixture.js";
 import { useAutoCleanupTempDirTracker } from "./helpers/temp-dir.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -557,17 +558,17 @@ describe("plugin npm runtime build planning", () => {
   });
 
   it("includes top-level public runtime surfaces", () => {
-    const diffsPlan = resolvePluginNpmRuntimeBuildPlan({
-      repoRoot,
-      packageDir: path.join(repoRoot, "extensions", "diffs"),
+    const fixtureRoot = tempDirs.make("openclaw-plugin-public-surfaces-");
+    const { packageDir } = writePublicRuntimeSurfacePluginFixture(fixtureRoot);
+    const plan = expectPluginNpmRuntimeBuildPlan(
+      resolvePluginNpmRuntimeBuildPlan({ repoRoot: fixtureRoot, packageDir }),
+    );
+    expect(plan.entry).toEqual({
+      api: path.join(packageDir, "api.ts"),
+      index: path.join(packageDir, "index.ts"),
+      "runtime-api": path.join(packageDir, "runtime-api.ts"),
     });
-    const diffsRuntimePlan = expectPluginNpmRuntimeBuildPlan(diffsPlan);
-    expect(diffsRuntimePlan.entry).toEqual({
-      api: path.join(repoRoot, "extensions", "diffs", "api.ts"),
-      index: path.join(repoRoot, "extensions", "diffs", "index.ts"),
-      "runtime-api": path.join(repoRoot, "extensions", "diffs", "runtime-api.ts"),
-    });
-    expect(diffsRuntimePlan.packageFiles).toEqual([
+    expect(plan.packageFiles).toEqual([
       "dist/**",
       "openclaw.plugin.json",
       "README.md",
