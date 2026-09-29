@@ -199,8 +199,13 @@ export async function sendSubagentAnnounceDirectly(
       params.targetRequesterSessionKey,
       params.requesterAgentId,
     );
+    // Private findings bind to the requester incarnation that produced them,
+    // including a deliverable settle continuation that is no longer parentOnly.
+    const requesterSessionBound =
+      parentOnly ||
+      (sourceToolId === "subagent_settle" && params.completionRequesterSessionId !== undefined);
     if (
-      parentOnly &&
+      requesterSessionBound &&
       (!params.completionRequesterSessionId ||
         requesterActivity.sessionId !== params.completionRequesterSessionId)
     ) {
@@ -278,7 +283,7 @@ export async function sendSubagentAnnounceDirectly(
         isSourceSessionEffectsAllowed: isCompletionDeliveryAllowed,
       });
     // Synthetic requester-settle turns must not inherit a tool-only mode that suppresses the final.
-    const completionSourceReplyDeliveryMode = parentOnly
+    const completionSourceReplyDeliveryMode = requesterSessionBound
       ? "automatic"
       : requiresMessageToolDelivery
         ? "message_tool_only"
@@ -372,7 +377,9 @@ export async function sendSubagentAnnounceDirectly(
     // A private completion gets its own serialized turn. Steering into a public
     // turn would inherit that turn's delivery policy and expose child output.
     const directAgentParams: Record<string, unknown> = {
-      ...(parentOnly ? { expectedExistingSessionId: params.completionRequesterSessionId } : {}),
+      ...(requesterSessionBound
+        ? { expectedExistingSessionId: params.completionRequesterSessionId }
+        : {}),
       sessionKey: canonicalRequesterSessionKey,
       message: params.triggerMessage,
       deliver: shouldDeliverAgentFinal,
@@ -396,6 +403,7 @@ export async function sendSubagentAnnounceDirectly(
     const classifyResponse = createDirectAnnounceResponseClassifier({
       params,
       parentOnly,
+      requesterSessionBound,
       deliveryTarget,
       shouldDeliverAgentFinal,
       requiresMessageToolDelivery,

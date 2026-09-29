@@ -388,11 +388,23 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
   );
   // Delivered children remain in yield cohorts. One private result makes the
   // aggregate private; public siblings keep their individual completion route.
+  // A yield hands continuation back to the requester, so its own final must be
+  // deliverable. Private findings stay wake input and remain session-bound; the
+  // requester may still reply NO_REPLY when nothing is owed.
   const privateRows = completionRows.filter((entry) => entry.completionTarget === "parent");
-  const parentOnly = privateRows.length > 0;
-  if (
-    privateRows.some((entry) => entry.completionRequesterSessionId !== requesterEntry.sessionId)
-  ) {
+  const hasPrivateRows = privateRows.length > 0;
+  // Policy is chosen once, at first admission, and persisted. A batch already
+  // attempted without the marker was admitted as a private turn (possibly by an
+  // earlier build); retrying it under a different policy could republish that input.
+  const yieldedFinalDeliverable =
+    hasPrivateRows &&
+    requesterYieldedAfterDelivery &&
+    (selectedState.yieldedFinalDeliverable === true ||
+      (selectedState.status === "pending" && selectedState.attemptCount === 0));
+  const parentOnly = hasPrivateRows && !yieldedFinalDeliverable;
+  // `/new` keeps the session id but rotates the lifecycle revision, so compare the
+  // whole incarnation; a deliverable retry must not post old findings into a reset session.
+  if (privateRows.some((entry) => !matchesSubagentRequesterSession(entry, requesterIdentity))) {
     await completeBatch(settledBatch, selectedState, {
       delivered: false,
       path: "none",
@@ -415,8 +427,9 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
   const completionChannel = normalizeMessageChannel(directOrigin?.channel);
   const wakeMessage = buildRequesterSettleWakeMessage({
     findings: preparedFindings.text,
-    requireVisibleReply: requesterYieldedAfterDelivery,
+    requireVisibleReply: requesterYieldedAfterDelivery && !hasPrivateRows,
     parentOnly,
+    yieldedFinalDeliverable,
     children: completionRows,
     recoveryChildren: recoveryRows,
     preserveModelRouteNotice: !completionChannel || !isDeliverableMessageChannel(completionChannel),
@@ -484,6 +497,7 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
         attemptCount: state.attemptCount + 1,
         batchRunIds,
         ...retainedYieldIdentity(state),
+        ...(yieldedFinalDeliverable ? { yieldedFinalDeliverable: true as const } : {}),
       };
       await params.transitionBatch(settledBatch, state);
     }
@@ -494,7 +508,9 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
       batchRunIds,
       rearmGeneration: selectedState.rearmGeneration,
       attemptIndex,
-      parentOnly,
+      // Private turns replay under one key; a deliverable yield retries under a
+      // fresh key so a cached terminal failure cannot stand in for a new send.
+      sharedAttemptKey: parentOnly,
     });
     const isRequesterCurrent = () => {
       const currentSession = loadRequesterSessionEntry(requesterSessionKey, requesterAgentId).entry;
@@ -610,13 +626,11 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
                 requesterIsSubagent: requesterDepth >= 1,
                 expectsCompletionMessage: false,
                 requireDirectDelivery: true,
-                ...(parentOnly
-                  ? {
-                      completionTarget: "parent",
-                      completionRequesterSessionId: requesterEntry.sessionId,
-                    }
+                ...(parentOnly ? { completionTarget: "parent" } : {}),
+                ...(hasPrivateRows
+                  ? { completionRequesterSessionId: requesterEntry.sessionId }
                   : {}),
-                ...(!parentOnly && requesterYieldedAfterDelivery
+                ...(requesterYieldedAfterDelivery && !hasPrivateRows
                   ? { requireVisibleReply: true }
                   : {}),
                 directIdempotencyKey,
