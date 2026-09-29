@@ -4897,6 +4897,15 @@ export function buildVitestRunPlans(
     ...activeTargetArgs,
   ]).flatMap((targetArg) => {
     const relative = toRepoRelativeTarget(targetArg, cwd);
+    if (
+      !watchMode &&
+      isPathAtOrUnder(relative, "packages") &&
+      !isGlobTarget(relative) &&
+      isExistingDirectoryTarget(targetArg, cwd)
+    ) {
+      // Package directories already contribute their existing leaves through activeTargetArgs.
+      return [];
+    }
     return isTestFileTarget(relative) ||
       isGlobTarget(relative) ||
       isExistingDirectoryTarget(targetArg, cwd)
