@@ -374,6 +374,7 @@ src/config/channel-configured.ts
 src/config/channel-schema-selection.ts
 src/config/cloud-worker-project-profiles.ts
 src/config/codex-plugin-diagnostics.ts
+src/config/config-env-values.ts
 src/config/config-env-vars.ts
 src/config/config-journal-snapshot.kernel.ts
 src/config/config-journal-snapshot.ts
