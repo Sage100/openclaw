@@ -86,9 +86,25 @@ describe("security audit config basics", () => {
     expect(finding?.detail).toContain("agents.entries.owner=full");
   });
 
-  it("flags tools.elevated allowFrom wildcard as critical", async () => {
+  it("retains exposure findings without judging model age or tier", async () => {
     const findings = await collectSecurityAuditFindings({
-      agents: { list: [{ id: "main", default: true }] },
+      agents: {
+        defaults: {
+          model: { primary: "legacy", fallbacks: ["anthropic/claude-2"] },
+          models: { "openai/gpt-3.5-turbo": { alias: "legacy" } },
+          imageModel: { primary: "openai/gpt-4-0613" },
+        },
+        entries: {
+          main: {
+            default: true,
+            model: {
+              primary: "anthropic/claude-haiku-4-5",
+              fallbacks: ["ollama/mistral-8b"],
+            },
+          },
+        },
+      },
+      browser: { enabled: true },
       tools: {
         elevated: {
           allowFrom: { whatsapp: ["*"] },
@@ -103,6 +119,12 @@ describe("security audit config basics", () => {
           finding.severity === "critical",
       ),
     ).toBe(true);
+    const checkIds = findings.map((finding) => finding.checkId);
+    expect(checkIds).not.toContain("models.legacy");
+    expect(checkIds).not.toContain("models.weak_tier");
+    expect(findings).toContainEqual(
+      expect.objectContaining({ checkId: "models.small_params", severity: "critical" }),
+    );
   });
 
   it("flags per-agent skill allowlists combined with host exec and a global mcporter registry", async () => {

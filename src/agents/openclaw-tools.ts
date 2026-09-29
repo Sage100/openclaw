@@ -183,6 +183,7 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
     agentDir: options?.agentDir,
     authProfileStore: options?.authProfileStore,
     agentSessionKey: mediaGenerationAgentSessionKey,
+    requesterRunSessionKey: trimmedRunSessionKey,
     requesterAgentId: sessionAgentId,
     requesterOrigin: widgetPresentation.deliveryContext ?? undefined,
     workspaceDir,
@@ -354,6 +355,7 @@ export function createOpenClawTools(options?: OpenClawToolsOptions): AnyAgentToo
     ? createProgressCardTool({
         agentSessionKey: sessionKey,
         agentId: sessionAgentId,
+        onPlanSaved: options?.onProgressCardPlanSaved,
       })
     : null;
   const transcriptsTool = resolveTranscriptsTool(resolvedConfig, sessionAgentId, options);

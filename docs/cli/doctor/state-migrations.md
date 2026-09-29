@@ -110,9 +110,10 @@ path preserves unknown deletion history; retained external stores still need Doc
 reconstruction before maintenance.
 Verified fresh SQLite setup initializes the journal normally, without a missing-history
 warning. Legacy JSON session files alone do not require journal reconstruction.
-Session SQLite import also admits ordinary historical agent databases when deletion
-history is unavailable. Recorded deletion and reconstruction holds, orphaned SQLite
-sidecars, and retained plugin inputs with import receipts remain protected.
+Session SQLite import and recovery hold existing agent databases and their sidecars
+when deletion history is unavailable, preserving legacy sources without importing
+or archiving them. Recorded deletion and reconstruction holds and retained plugin
+inputs with import receipts remain protected.
 Unreadable history does not erase readable deletion identities or recorded holds.
 `openclaw doctor --fix` reconstructs the journal and records a receipt listing the
 held database paths in the existing migration tables. Reconstruction preserves
@@ -160,6 +161,12 @@ transaction still validates every transcript and trajectory row before committin
 invalid JSON later in either store rolls back the media changes. Databases with
 no media repairs still receive a complete validation scan, including after imports
 or restores.
+
+Missing file copies of canonical SQLite transcript archives produce recoverable
+warnings with the total count and at most five example paths per database.
+Media and historical transcript migrations still complete, retain the canonical
+SQLite blobs, and leave deleted copies absent. These warnings do not block the
+remaining migration steps or database readiness.
 
 Doctor shares its initial fleet schema and ownership inspection across the update
 guard and admission checks. Database readers use a bounded worker pool, including

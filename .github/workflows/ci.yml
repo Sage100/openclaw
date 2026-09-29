@@ -2534,12 +2534,13 @@ jobs:
                     {
                       check_name: "android-test-third-party",
                       task: "test-third-party",
+                      ...(androidTestTier ? { app_lint: "third-party" } : {}),
                     },
                     ...(!useCompatibleAndroidCi
                       ? [{
                           check_name: "android-test-wear",
                           task: "test-wear",
-                          ...(androidTestTier ? { lint: true, app_lint: "third-party" } : {}),
+                          ...(androidTestTier ? { lint: true } : {}),
                         }]
                       : []),
                     ...(!androidTestTier
@@ -4006,10 +4007,10 @@ jobs:
               ;;
             contracts-plugins-ci-routing)
               pnpm test:contracts:plugins
-              pnpm test src/commands/status.scan-result.test.ts src/scripts/ci-changed-scope*.test.ts test/scripts/changed-lanes.test.ts test/scripts/changed-path-facts.test.ts test/scripts/ci-changed-node-test-plan.test.ts test/scripts/ci-docker-seed-plan.test.ts test/scripts/ci-run-node-test-shard.test.ts test/scripts/ci-hourly.test.ts test/scripts/ci-workflow-guards.test.ts test/scripts/ci-workflow-planning.test.ts test/scripts/ci-workflow-evidence.test.ts test/scripts/run-vitest.test.ts test/scripts/test-projects.test.ts
+              pnpm test src/commands/status.scan-result.test.ts src/scripts/ci-changed-scope*.test.ts test/scripts/changed-lanes.test.ts test/scripts/changed-path-facts.test.ts test/scripts/ci-changed-node-test-plan.test.ts test/scripts/ci-changed-node-test-plan.config-fallback.test.ts test/scripts/ci-changed-node-test-plan.dependency-inputs.test.ts test/scripts/ci-changed-node-test-plan.dependency-hubs.test.ts test/scripts/ci-changed-node-test-plan.policy.test.ts test/scripts/ci-changed-node-test-plan.process-owners.test.ts test/scripts/ci-changed-node-test-plan.source-owners.test.ts test/scripts/ci-docker-seed-plan.test.ts test/scripts/ci-run-node-test-shard.test.ts test/scripts/ci-hourly.test.ts test/scripts/ci-workflow-guards.test.ts test/scripts/ci-workflow-planning.test.ts test/scripts/ci-workflow-evidence.test.ts test/scripts/run-vitest.test.ts test/scripts/test-projects.test.ts
               ;;
             ci-routing)
-              pnpm test src/commands/status.scan-result.test.ts src/scripts/ci-changed-scope*.test.ts test/scripts/changed-lanes.test.ts test/scripts/changed-path-facts.test.ts test/scripts/ci-changed-node-test-plan.test.ts test/scripts/ci-docker-seed-plan.test.ts test/scripts/ci-run-node-test-shard.test.ts test/scripts/ci-hourly.test.ts test/scripts/ci-workflow-guards.test.ts test/scripts/ci-workflow-planning.test.ts test/scripts/ci-workflow-evidence.test.ts test/scripts/run-vitest.test.ts test/scripts/test-projects.test.ts
+              pnpm test src/commands/status.scan-result.test.ts src/scripts/ci-changed-scope*.test.ts test/scripts/changed-lanes.test.ts test/scripts/changed-path-facts.test.ts test/scripts/ci-changed-node-test-plan.test.ts test/scripts/ci-changed-node-test-plan.config-fallback.test.ts test/scripts/ci-changed-node-test-plan.dependency-inputs.test.ts test/scripts/ci-changed-node-test-plan.dependency-hubs.test.ts test/scripts/ci-changed-node-test-plan.policy.test.ts test/scripts/ci-changed-node-test-plan.process-owners.test.ts test/scripts/ci-changed-node-test-plan.source-owners.test.ts test/scripts/ci-docker-seed-plan.test.ts test/scripts/ci-run-node-test-shard.test.ts test/scripts/ci-hourly.test.ts test/scripts/ci-workflow-guards.test.ts test/scripts/ci-workflow-planning.test.ts test/scripts/ci-workflow-evidence.test.ts test/scripts/run-vitest.test.ts test/scripts/test-projects.test.ts
               ;;
             coercion-helpers)
               pnpm check:coercion-helpers
@@ -5175,7 +5176,7 @@ jobs:
     name: check-lint-core-${{ matrix.stripe }}
     needs: [preflight, check-plan]
     if: ${{ !cancelled() && !failure() && (needs.preflight.outputs.run_check_plan != 'true' || needs.check-plan.result == 'success') && (needs.preflight.outputs.run_check == 'true' && (needs.preflight.outputs.run_check_plan == 'true' && needs.check-plan.outputs.run_lint_core || needs.preflight.outputs.run_lint_core) == 'true' && (needs.preflight.outputs.runner_profile == 'github' || needs.preflight.outputs.runner_profile == 'hybrid') && (needs.preflight.outputs.frozen_target != 'true' || needs.preflight.outputs.hosted_runner_profile_contract == 'true')) }}
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') && vars.OPENCLAW_RELEASE_RUNNER_GROUP || '') != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON((github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') && vars.OPENCLAW_RELEASE_RUNNER_GROUP || '')), toJSON(contains(fromJSON('["hybrid","runson"]'), (needs.preflight.outputs.ci_qualification == 'true' && needs.preflight.outputs.qualification_runner_backend || vars.OPENCLAW_CI_RUNNER_BACKEND)) && github.run_attempt == 1 && github.repository == 'openclaw/openclaw' && (github.event_name != 'pull_request' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.pull_request.author_association)) && (github.event_name != 'workflow_dispatch' || needs.preflight.outputs.ci_qualification == 'true' || needs.preflight.outputs.node_runner_backend == 'runson') && needs.preflight.outputs.frozen_target != 'true' && (needs.preflight.outputs.runner_profile == 'hybrid' && matrix.stripe == 1 && 'blacksmith-16vcpu-ubuntu-2404' || 'blacksmith-8vcpu-ubuntu-2404') || 'ubuntu-24.04'))) || (contains(fromJSON('["hybrid","runson"]'), (needs.preflight.outputs.ci_qualification == 'true' && needs.preflight.outputs.qualification_runner_backend || vars.OPENCLAW_CI_RUNNER_BACKEND)) && github.run_attempt == 1 && github.repository == 'openclaw/openclaw' && (github.event_name != 'pull_request' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.pull_request.author_association)) && (github.event_name != 'workflow_dispatch' || needs.preflight.outputs.ci_qualification == 'true' || needs.preflight.outputs.node_runner_backend == 'runson') && needs.preflight.outputs.frozen_target != 'true' && (needs.preflight.outputs.runner_profile == 'hybrid' && matrix.stripe == 1 && 'blacksmith-16vcpu-ubuntu-2404' || 'blacksmith-8vcpu-ubuntu-2404') || 'ubuntu-24.04') }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') && vars.OPENCLAW_RELEASE_RUNNER_GROUP || '') != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON((github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') && vars.OPENCLAW_RELEASE_RUNNER_GROUP || '')), toJSON(contains(fromJSON('["hybrid","runson"]'), (needs.preflight.outputs.ci_qualification == 'true' && needs.preflight.outputs.qualification_runner_backend || vars.OPENCLAW_CI_RUNNER_BACKEND)) && github.run_attempt == 1 && github.repository == 'openclaw/openclaw' && (github.event_name != 'pull_request' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.pull_request.author_association)) && (github.event_name != 'workflow_dispatch' || needs.preflight.outputs.ci_qualification == 'true' || needs.preflight.outputs.node_runner_backend == 'runson') && needs.preflight.outputs.frozen_target != 'true' && (needs.preflight.outputs.runner_profile == 'hybrid' && (matrix.stripe == 1 || (needs.preflight.outputs.ci_qualification == 'true' && needs.preflight.outputs.qualification_runner_backend || vars.OPENCLAW_CI_RUNNER_BACKEND) == 'hybrid') && 'blacksmith-16vcpu-ubuntu-2404' || 'blacksmith-8vcpu-ubuntu-2404') || 'ubuntu-24.04'))) || (contains(fromJSON('["hybrid","runson"]'), (needs.preflight.outputs.ci_qualification == 'true' && needs.preflight.outputs.qualification_runner_backend || vars.OPENCLAW_CI_RUNNER_BACKEND)) && github.run_attempt == 1 && github.repository == 'openclaw/openclaw' && (github.event_name != 'pull_request' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.pull_request.author_association)) && (github.event_name != 'workflow_dispatch' || needs.preflight.outputs.ci_qualification == 'true' || needs.preflight.outputs.node_runner_backend == 'runson') && needs.preflight.outputs.frozen_target != 'true' && (needs.preflight.outputs.runner_profile == 'hybrid' && (matrix.stripe == 1 || (needs.preflight.outputs.ci_qualification == 'true' && needs.preflight.outputs.qualification_runner_backend || vars.OPENCLAW_CI_RUNNER_BACKEND) == 'hybrid') && 'blacksmith-16vcpu-ubuntu-2404' || 'blacksmith-8vcpu-ubuntu-2404') || 'ubuntu-24.04') }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -5804,8 +5805,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Native allocation can be smaller than the runner label. Keep projects
-          # serial within each machine; matrix rows own disjoint complete files.
+          # Allocation can undershoot labels; run complete matrix files serially per machine.
           export OPENCLAW_TEST_PROJECTS_PARALLEL=1
           case "$TASK" in
             test)
@@ -5823,8 +5823,7 @@ jobs:
           process.exit(result.status ?? 1);
           WINDOWS_TESTS
               ;;
-            # Linux owns the full repo test suite. Keep the Windows runner focused on
-            # Windows-native process/path wrappers so platform regressions fail fast.
+            # Linux owns full coverage; Windows targets native process/path wrappers.
             test-1)
               if node -e 'process.exit(require("./package.json").scripts?.["test:windows:ci:1"] ? 0 : 1)'; then
                 pnpm test:windows:ci:1 -- --fileParallelism
@@ -5876,8 +5875,7 @@ jobs:
               pnpm "test:macos:ci:${TASK#test-}"
               ;;
             test)
-              # Linux owns the full repo test suite. Keep macOS CI focused on
-              # launchd/Homebrew/runtime path coverage and the process-group wrapper.
+              # Linux owns full coverage; macOS targets launchd/Homebrew, paths, and process groups.
               pnpm test:macos:ci
               ;;
             *)
@@ -7047,7 +7045,7 @@ jobs:
               ;;
           esac
 
-          # Phone tests dominate their rows; the lighter rows own app lint without adding jobs.
+          # Third-party lint reuses its phone test compilation and build metadata.
           case "$APP_LINT" in
             third-party)
               ./gradlew "${android_build_metadata[@]}" --no-daemon --build-cache :app:lintThirdPartyDebug
@@ -7194,7 +7192,9 @@ jobs:
     needs: [preflight]
     if: needs.preflight.outputs.run_docker_seed_e2e == 'true'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') && vars.OPENCLAW_RELEASE_RUNNER_GROUP || '') != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON((github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') && vars.OPENCLAW_RELEASE_RUNNER_GROUP || '')), toJSON((needs.preflight.outputs.ci_qualification == 'true' && (github.run_attempt == 1 && needs.preflight.outputs.qualification_runner_backend || 'github') || vars.OPENCLAW_CI_RUNNER_BACKEND) == 'github' && 'ubuntu-24.04' || (contains(fromJSON('["hybrid","runson"]'), (needs.preflight.outputs.ci_qualification == 'true' && (github.run_attempt == 1 && needs.preflight.outputs.qualification_runner_backend || 'github') || vars.OPENCLAW_CI_RUNNER_BACKEND)) && github.run_attempt > 1) && 'ubuntu-24.04' || (github.event_name == 'workflow_dispatch' && ((needs.preflight.outputs.node_runner_backend != 'runson' && needs.preflight.outputs.ci_qualification != 'true') || github.run_attempt != 1)) && 'ubuntu-24.04' || (github.event_name == 'pull_request' && (github.run_attempt > 1 || github.event.pull_request.head.repo.full_name != github.repository)) && 'ubuntu-24.04' || (github.repository == 'openclaw/openclaw' && (github.event_name != 'pull_request' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.pull_request.author_association)) && 'blacksmith-16vcpu-ubuntu-2404' || 'ubuntu-24.04')))) || ((needs.preflight.outputs.ci_qualification == 'true' && (github.run_attempt == 1 && needs.preflight.outputs.qualification_runner_backend || 'github') || vars.OPENCLAW_CI_RUNNER_BACKEND) == 'github' && 'ubuntu-24.04' || (contains(fromJSON('["hybrid","runson"]'), (needs.preflight.outputs.ci_qualification == 'true' && (github.run_attempt == 1 && needs.preflight.outputs.qualification_runner_backend || 'github') || vars.OPENCLAW_CI_RUNNER_BACKEND)) && github.run_attempt > 1) && 'ubuntu-24.04' || (github.event_name == 'workflow_dispatch' && ((needs.preflight.outputs.node_runner_backend != 'runson' && needs.preflight.outputs.ci_qualification != 'true') || github.run_attempt != 1)) && 'ubuntu-24.04' || (github.event_name == 'pull_request' && (github.run_attempt > 1 || github.event.pull_request.head.repo.full_name != github.repository)) && 'ubuntu-24.04' || (github.repository == 'openclaw/openclaw' && (github.event_name != 'pull_request' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.pull_request.author_association)) && 'blacksmith-16vcpu-ubuntu-2404' || 'ubuntu-24.04')) }}
-    timeout-minutes: 60
+    # Six serial lanes, hosted 4 vCPU: (120s setup + 1032s package + 1668s other) x 1.5
+    # + 2580s survivor = 6810s => 115m (CI 36506671071); 60m cancelled CI 36486786689.
+    timeout-minutes: 115
     steps:
       - *linux_node_checkout_step
       - name: Setup Node environment
@@ -7351,8 +7351,7 @@ jobs:
       - docker-seed-e2e
       - pr-fail-fast
     if: ${{ (github.event_name != 'schedule' || (github.repository == 'openclaw/openclaw' && github.ref == 'refs/heads/main')) && ((github.event_name != 'push' || github.ref != 'refs/heads/main' || vars.OPENCLAW_CI_ON_PUSH == 'true') && always() && (github.event_name == 'schedule' || !cancelled() || (needs.pr-fail-fast.outputs.failure_run_attempt == format('{0}', github.run_attempt) && needs.pr-fail-fast.outputs.failure_job_id != '') || (github.run_attempt == 1 && needs.pr-fail-fast.result == 'failure')) && (github.event_name != 'pull_request' || !github.event.pull_request.draft)) }}
-    # Keep critical-path routing; default Blacksmith PR failures also need
-    # a runner inside the cancellation grace period.
+    # Blacksmith PR failures need critical-path routing within cancellation grace.
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') && vars.OPENCLAW_RELEASE_RUNNER_GROUP || '') != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON((github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') && vars.OPENCLAW_RELEASE_RUNNER_GROUP || '')), toJSON((contains(fromJSON('["hybrid","runson"]'), (needs.preflight.outputs.ci_qualification == 'true' && needs.preflight.outputs.qualification_runner_backend || vars.OPENCLAW_CI_RUNNER_BACKEND)) && github.run_attempt == 1 && github.repository == 'openclaw/openclaw' && (github.event_name != 'pull_request' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.pull_request.author_association)) && (github.event_name != 'workflow_dispatch' || needs.preflight.outputs.ci_qualification == 'true' || needs.preflight.outputs.node_runner_backend == 'runson') || (github.event_name == 'pull_request' && github.run_attempt == 1 && github.repository == 'openclaw/openclaw' && github.event.pull_request.head.repo.full_name == github.repository && vars.OPENCLAW_CI_RUNNER_BACKEND != 'github' && needs.preflight.outputs.runner_profile == 'blacksmith' && ((needs.pr-fail-fast.outputs.failure_run_attempt == '1' && needs.pr-fail-fast.outputs.failure_job_id != '') || needs.pr-fail-fast.result == 'failure'))) && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04'))) || ((contains(fromJSON('["hybrid","runson"]'), (needs.preflight.outputs.ci_qualification == 'true' && needs.preflight.outputs.qualification_runner_backend || vars.OPENCLAW_CI_RUNNER_BACKEND)) && github.run_attempt == 1 && github.repository == 'openclaw/openclaw' && (github.event_name != 'pull_request' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.pull_request.author_association)) && (github.event_name != 'workflow_dispatch' || needs.preflight.outputs.ci_qualification == 'true' || needs.preflight.outputs.node_runner_backend == 'runson') || (github.event_name == 'pull_request' && github.run_attempt == 1 && github.repository == 'openclaw/openclaw' && github.event.pull_request.head.repo.full_name == github.repository && vars.OPENCLAW_CI_RUNNER_BACKEND != 'github' && needs.preflight.outputs.runner_profile == 'blacksmith' && ((needs.pr-fail-fast.outputs.failure_run_attempt == '1' && needs.pr-fail-fast.outputs.failure_job_id != '') || needs.pr-fail-fast.result == 'failure'))) && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04') }}
     timeout-minutes: 5
     steps:
@@ -7374,6 +7373,7 @@ jobs:
         shell: bash
         env:
           RELEASE_FAST_LANE: ${{ needs.preflight.outputs.release_fast_lane }}
+          FRV_WINDOWS_NODE_ADVISORY: ${{ github.event_name == 'workflow_dispatch' && startsWith(inputs.dispatch_id, 'full-release-validation-') }}
           ALLOW_COALESCED_IOS: ${{ github.event_name == 'schedule' && github.repository == 'openclaw/openclaw' && github.ref == 'refs/heads/main' }}
           ALLOW_KNOWN_MAIN_RED: ${{ github.event_name == 'pull_request' && github.run_attempt == 1 && needs.pr-fail-fast.result == 'success' && needs.pr-fail-fast.outputs.known_main_red_attempt == format('{0}', github.run_attempt) }}
           JOB_RESULTS: |
@@ -7416,8 +7416,7 @@ jobs:
           set -euo pipefail
           echo "release fast lane: ${RELEASE_FAST_LANE:-false}"
 
-          # Preserve raw fields: IFS splitting can erase malformed trailing
-          # delimiters and turn invalid results or selection into accepted values.
+          # Preserve raw fields; IFS can hide invalid trailing delimiters.
           failures=0
           while IFS= read -r entry; do
             [[ -n "$entry" ]] || continue
@@ -7426,6 +7425,12 @@ jobs:
             selected="${result#*|}"
             result="${result%%|*}"
             echo "${name}: ${result} (selected=${selected:-missing})"
+            # Workflow tests pin WINDOWS_NODE_CI_ADVISORY.
+            if [[ "${FRV_WINDOWS_NODE_ADVISORY:-false}" == "true" && "$name:$selected:$result" == "checks-windows:true:failure" ]]; then
+              echo "::notice title=windows-node-ci advisory::Windows Node unit-test shards failed; Full Release Validation records these results without blocking release."
+              echo 'Advisory class `windows-node-ci`: Windows Node unit-test shards failed. Individual shard results remain visible and are recorded in Full Release Validation evidence.' >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
             if [[ "${ALLOW_KNOWN_MAIN_RED:-false}" == "true" && "$selected:$result" == "true:failure" ]]; then
               case "$name" in
                 checks-node-core-test-nondist-shard|check-shard|check-test-types-hosted-core-shard|check-lint-hosted-core-shard|check-lint-hosted-extension-shard)
@@ -7434,8 +7439,7 @@ jobs:
                   ;;
               esac
             fi
-            # The scheduled iOS slot finishes its active job and replaces pending
-            # jobs. Only that cancellation delegates proof to the next hourly run.
+            # Only scheduled iOS pending-job replacement delegates proof to the next hour.
             if [[ "${ALLOW_COALESCED_IOS:-false}" == "true" && "$name:$selected:$result" == "ios-build:true:cancelled" ]]; then
               echo "::notice title=Hourly iOS proof coalesced::A later scheduled iOS job owns simulator proof."
               continue
@@ -7451,9 +7455,9 @@ jobs:
 
           exit "$failures"
 
-      # Write-capable consumers require this exact-attempt receipt; skipped CI proves nothing.
+      # Writes require this exact-attempt receipt; skipped CI proves nothing.
       - name: Confirm validated workflow revision
-        if: success() && needs.preflight.outputs.validation_tier == 'full' && needs.preflight.outputs.checkout_revision == github.sha && (github.event_name != 'workflow_dispatch' || (!inputs.release_gate && inputs.target_ref == '' && inputs.release_scope == 'full' && inputs.include_android))
+        if: success() && needs.preflight.outputs.validation_tier == 'full' && needs.preflight.outputs.checkout_revision == github.sha && (github.event_name != 'workflow_dispatch' || (!startsWith(inputs.dispatch_id, 'full-release-validation-') && !inputs.release_gate && inputs.target_ref == '' && inputs.release_scope == 'full' && inputs.include_android))
         run: echo "Full CI validated the immutable workflow revision."
   seal_release_child_evidence:
     name: Seal full release child evidence
