@@ -15,6 +15,7 @@ import type {
   HumanMention,
 } from "../../../lib/chat/chat-types.ts";
 import { updateHumanMentions, type HumanMentionInput } from "../../../lib/chat/human-mentions.ts";
+import { getChatAttachmentPreviewUrl } from "../attachment-payload-store.ts";
 import { isQueuedSendInlineState } from "../chat-progress.ts";
 import { isSteerableQueuedMessage } from "../chat-queue.ts";
 import { renderChatAuthorAvatar } from "./chat-author-avatar.ts";
@@ -285,6 +286,8 @@ function renderChatQueueItem(
 ) {
   const authorAvatar = renderChatAuthorAvatar(item.sender);
   const hasAuthorAvatar = authorAvatar !== nothing;
+  const images = item.attachments?.filter((attachment) => attachment.mimeType.startsWith("image/"));
+  const previewUrl = images?.[0] ? getChatAttachmentPreviewUrl(images[0]) : null;
   const failed =
     item.sendState === "failed" || item.sendState === "unconfirmed" || item.sendState === "held";
   const reconnecting =
@@ -323,7 +326,7 @@ function renderChatQueueItem(
   // The leading glyph identifies the object, not its transient delivery state.
   // Row tone, badges, and actions carry failure, review, reconnect, and steer.
   const leadingIcon = queueWaitingIcon;
-  const itemClass = `chat-queue__item${hasAuthorAvatar ? "" : " chat-queue__item--no-avatar"}${steered ? " chat-queue__item--steered" : ""}${
+  const itemClass = `chat-queue__item${hasAuthorAvatar ? "" : " chat-queue__item--no-avatar"}${previewUrl ? " chat-queue__item--with-images" : ""}${steered ? " chat-queue__item--steered" : ""}${
     failed ? " chat-queue__item--failed" : ""
   }${reconnecting ? " chat-queue__item--reconnect" : ""}${
     editing ? " chat-queue__item--editing" : ""
@@ -445,6 +448,18 @@ function renderChatQueueItem(
             >`
       }
       ${authorAvatar}
+      ${
+        previewUrl && images
+          ? html`<span
+              class="chat-queue__images"
+              data-count=${Math.min(images.length, 3)}
+              role="img"
+              aria-label=${t("chat.queue.imageCount", { count: String(images.length) })}
+            >
+              <img src=${previewUrl} alt="" draggable="false" />
+            </span>`
+          : nothing
+      }
       ${
         editing
           ? html`<textarea
