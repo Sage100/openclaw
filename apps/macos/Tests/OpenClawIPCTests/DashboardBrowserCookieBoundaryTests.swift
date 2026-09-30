@@ -93,7 +93,7 @@ struct DashboardBrowserCookieBoundaryTests {
             audience: "fixture",
             subject: "fixture-account",
             token: token,
-            expiresAt: Date().addingTimeInterval(300))
+            expiresAt: .fixtureSessionExpiry)
         let store = DashboardBrowserSessionStore(dataStore: .nonPersistent())
         let controller = DashboardWindowController(
             url: gateway.url(),
@@ -150,7 +150,7 @@ struct DashboardBrowserCookieBoundaryTests {
             audience: "fixture",
             subject: "fixture-account",
             token: "synthetic",
-            expiresAt: Date().addingTimeInterval(300))
+            expiresAt: .fixtureSessionExpiry)
         let store = DashboardBrowserSessionStore(dataStore: .nonPersistent())
         try await store.lease(for: session).prepare(for: session.origin, in: WKUserContentController())
         #expect(await store.dataStore.httpCookieStore.allCookies().count == 1)

@@ -30,7 +30,7 @@ struct DashboardBrowserSessionTests {
     private func session(
         _ token: String,
         subject: String = "fixture-account",
-        expiresAt: Date = Date().addingTimeInterval(300)) throws -> GatewayBrowserSession
+        expiresAt: Date = .fixtureSessionExpiry) throws -> GatewayBrowserSession
     {
         try GatewayBrowserSession(
             origin: #require(URL(string: "https://gateway.example/")),
@@ -319,7 +319,7 @@ struct DashboardBrowserSessionTests {
             audience: "fixture",
             subject: "account",
             token: "synthetic",
-            expiresAt: Date().addingTimeInterval(300))
+            expiresAt: .fixtureSessionExpiry)
         let existingStore = WKWebsiteDataStore.nonPersistent()
         let manager = DashboardManager._testMake(
             websiteDataStore: existingStore,
@@ -808,5 +808,13 @@ struct DashboardEmbedCookieTests {
         let next = try self.session(host: "gateway.example.com", subject: "another-account")
         try await store.lease(for: next).prepare(for: next.origin, in: WKUserContentController())
         #expect(await store.dataStore.httpCookieStore.allCookies().map(\.domain) == ["gateway.example.com"])
+    }
+}
+
+extension Date {
+    /// Synthetic browser sessions outlive the CI job, so a starved runner cannot expire a
+    /// session in a test that is not about expiry.
+    static var fixtureSessionExpiry: Date {
+        Date().addingTimeInterval(24 * 60 * 60)
     }
 }
