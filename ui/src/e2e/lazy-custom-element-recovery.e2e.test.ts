@@ -15,6 +15,7 @@ import {
   defaultControlUiFeatureMethods,
   installMockGateway,
 } from "../test-helpers/control-ui-e2e.ts";
+import { controlUiE2eBuiltModuleRequest } from "./control-ui-built-module.test-support.ts";
 import {
   createControlUiE2eSuite,
   holdModuleResponse,
@@ -312,7 +313,7 @@ suite.define(() => {
       async ({ page }) => {
         const failure = await installChunkFailure(
           page,
-          /\/assets\/login-gate-[^/?]+\.js(?:\?.*)?$/u,
+          controlUiE2eBuiltModuleRequest("ui/src/components/login-gate.ts"),
         );
         const gateway = await installMockGateway(page, { deferredMethods: ["connect"] });
         const rejectLogin = async () => {
