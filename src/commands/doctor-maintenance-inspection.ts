@@ -6,7 +6,7 @@ import { hasGatewayServiceStopUnsafeError } from "../daemon/service-inspection-e
 import { collectNestedErrorCandidates } from "../infra/error-graph-internal.js";
 import { ExecApprovalsMigrationRequiredError } from "../infra/exec-approvals-migration-gate.js";
 import { GatewayLockError } from "../infra/gateway-lock.js";
-import type { GatewayOwnerLeaseIdentity } from "../infra/gateway-owner-lease.js";
+import type { GatewayOwnerLeaseIdentity } from "../infra/gateway-owner-lease.types.js";
 import { GatewayStateOwnerContentionError } from "../infra/gateway-state-owner.js";
 import { StartupMaintenanceRequiredError } from "../infra/startup-maintenance-required.js";
 import { readStateLeaseProcessOwnerStatus } from "../infra/state-lease-process-owner.js";

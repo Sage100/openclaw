@@ -18,26 +18,15 @@ import {
 } from "../state/openclaw-state-lease-store.js";
 import { assertOpenClawStateWriteAllowed } from "../state/openclaw-state-ownership.js";
 import { gatewayOwnerKey, readGatewayOwnerLeaseFromDatabase } from "./gateway-owner-lease.read.js";
+import type {
+  GatewayOwnerLeaseIdentity,
+  GatewayOwnerSupervisor,
+} from "./gateway-owner-lease.types.js";
 import { resolveDiagnosticProcessEnv } from "./process-env.js";
 import { runSqliteImmediateTransactionSync } from "./sqlite-transaction.js";
 import { STARTUP_MIGRATION_LEASE_TTL_MS } from "./startup-migration-checkpoint.js";
-import type { StateLeaseProcessOwner } from "./state-lease-process-owner.js";
 
 const log = createSubsystemLogger("gateway");
-
-export type GatewayOwnerSupervisor = {
-  kind: "launchd" | "systemd" | "schtasks" | "external";
-  name: string | null;
-};
-
-export type GatewayOwnerLeaseIdentity = StateLeaseProcessOwner & {
-  owner: string;
-  port: number;
-  mode: "foreground" | "supervised";
-  supervisor: GatewayOwnerSupervisor | null;
-  state: "live" | "dead" | "unknown";
-  expired: boolean;
-};
 
 export type GatewayOwnerLease = {
   owner: string;

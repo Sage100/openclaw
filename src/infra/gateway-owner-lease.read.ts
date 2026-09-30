@@ -2,7 +2,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { tableExists } from "../state/openclaw-state-db-schema-helpers.js";
 import { readOpenClawStateLease } from "../state/openclaw-state-lease-store.js";
-import type { GatewayOwnerLeaseIdentity, GatewayOwnerSupervisor } from "./gateway-owner-lease.js";
+import type {
+  GatewayOwnerLeaseIdentity,
+  GatewayOwnerSupervisor,
+} from "./gateway-owner-lease.types.js";
 import {
   parseStateLeaseProcessOwner,
   readStateLeaseProcessOwnerStatus,
