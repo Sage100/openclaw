@@ -39,10 +39,6 @@ If Gateway password auth is supplied only at startup, pass the same value with `
   - Fix: the detail lists each agent's reach and allowed session tools. Narrow [session visibility or agent-to-agent access](/gateway/config-tools#tools-agenttoagent) for persona separation.
 - Warns when small models (`<=300B` parameters) are used without sandboxing and with web/browser tools enabled.
 
-### Models
-
-Model choice is an operator decision. The audit does not recommend changing models based on their names, age, or provider tiers. The separate small-model tool-exposure check still evaluates web/browser access; sandbox, tool-policy, authentication, and network-exposure checks are unchanged.
-
 ### Webhook/hooks
 
 Startup logs a non-fatal security warning, and audit flags `hooks.token` reuse of active Gateway shared-secret auth values (`gateway.auth.token` / `OPENCLAW_GATEWAY_TOKEN`, `gateway.auth.password` / `OPENCLAW_GATEWAY_PASSWORD`). Also warns when:
