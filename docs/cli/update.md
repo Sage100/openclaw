@@ -333,6 +333,12 @@ require storing a task password.
 This target-CLI protection does not cover every Doctor or plugin child or the
 in-process service preparation before package mutation.
 
+Cancelling a Windows update before package mutation restores the Scheduled Task's
+previous autostart state before exiting. Cancellation blocks new update work but
+allows that restoration while the original executor and service identity remain
+current. A replaced task or lost executor still prevents restoration. This behavior
+belongs to the installed updater; a newly installed fix applies to its next update.
+
 ## Options
 
 Post-core repair Doctor and `openclaw update finalize` run without a separate
