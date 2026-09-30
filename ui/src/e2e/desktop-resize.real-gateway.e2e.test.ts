@@ -394,7 +394,7 @@ suite.define(() => {
           const assets = new Map<string, string>();
           const assetReads: Promise<unknown>[] = [];
           page.on("response", (response) => {
-            if (/\/assets\/(?:index|desktop)[^/]*\.js$/u.test(new URL(response.url()).pathname)) {
+            if (/\/assets\/[^/]+\.js$/u.test(new URL(response.url()).pathname)) {
               assetReads.push(
                 response.body().then(
                   (bytes) =>
