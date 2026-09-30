@@ -5,7 +5,7 @@ import WebKit
 @testable import OpenClaw
 
 /// WebKit fixtures are compiled locally and executed only in the disposable macOS runner.
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct NativeConversationBridgeTests {
     @Test func `Dashboard handoff removes exactly the document mount`() throws {

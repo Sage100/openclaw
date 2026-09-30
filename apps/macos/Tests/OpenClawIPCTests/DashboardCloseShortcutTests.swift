@@ -4,7 +4,7 @@ import Testing
 import WebKit
 @testable import OpenClaw
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct DashboardCloseShortcutTests {
     @Test func `command W routes native browser focus to the visible presenting panel`() async throws {

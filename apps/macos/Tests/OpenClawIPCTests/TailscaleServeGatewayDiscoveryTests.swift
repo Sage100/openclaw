@@ -99,7 +99,7 @@ struct TailscaleServeGatewayDiscoveryTests {
     }
 }
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct GatewayDiscoveryProbeTests {
     @Test func `challenge discovery never sends or retains credentials across peer probes`() async throws {

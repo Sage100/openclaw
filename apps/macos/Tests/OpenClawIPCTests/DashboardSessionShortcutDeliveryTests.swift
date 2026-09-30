@@ -4,7 +4,7 @@ import Testing
 import WebKit
 @testable import OpenClaw
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct DashboardSessionShortcutDeliveryTests {
     @Test(arguments: [("o", UInt16(31)), ("a", UInt16(0))], ["body", "composer"])

@@ -5,7 +5,7 @@ import Testing
 @testable import OpenClaw
 @testable import OpenClawKit
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct CronJobsStoreTests {
     @Test func `count-only refreshes notify observers without changing preview rows`() async throws {

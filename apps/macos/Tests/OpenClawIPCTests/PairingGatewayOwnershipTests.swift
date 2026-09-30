@@ -145,7 +145,7 @@ private final class PairingGatewayFixture: @unchecked Sendable {
     }
 }
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct PairingGatewayOwnershipTests {
     @Test func `direct silent pairing shows explicit approval without waiting for discovery`() async throws {

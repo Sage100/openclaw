@@ -24,7 +24,7 @@ private final class DashboardCookieNavigationObserver: NSObject, WKNavigationDel
     }
 }
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct DashboardBrowserSessionTests {
     private func session(

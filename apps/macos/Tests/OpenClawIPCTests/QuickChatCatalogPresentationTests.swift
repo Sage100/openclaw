@@ -6,7 +6,7 @@ import Testing
 @testable import OpenClaw
 @testable import OpenClawKit
 
-@Suite(.timeLimit(.minutes(3)))
+@Suite(.testWaitLimit)
 @MainActor
 struct QuickChatCatalogPresentationTests {
     @Test func `rendered Quick Chat preserves catalog disclosure and shortcut behavior in order`() async throws {

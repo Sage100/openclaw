@@ -5,7 +5,7 @@ import OpenClawKit
 import Testing
 @testable import OpenClaw
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct NodesStoreTests {
     @Test func `named profile keeps durable node service unavailability informational`() async {

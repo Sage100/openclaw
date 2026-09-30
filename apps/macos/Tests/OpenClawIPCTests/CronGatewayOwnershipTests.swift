@@ -130,7 +130,7 @@ final class CronSourceFixture: @unchecked Sendable {
     }
 }
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct CronGatewayOwnershipTests {
     @Test(arguments: ["active replacement", "inactive replacement", "inactive same route"])

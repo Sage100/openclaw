@@ -6,7 +6,7 @@ import Testing
 @testable import OpenClaw
 @testable import OpenClawKit
 
-@Suite(.timeLimit(.minutes(1)))
+@Suite(.testWaitLimit)
 @MainActor
 struct QuickChatCatalogPublicationTests {
     @Test(arguments: [

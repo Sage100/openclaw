@@ -3,7 +3,7 @@ import SwiftUI
 import Testing
 @testable import OpenClaw
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct GatewaySettingsSmokeTests {
     @Test func `first Reconnect prefills the Gateway and Add starts a fresh empty editor`() async throws {

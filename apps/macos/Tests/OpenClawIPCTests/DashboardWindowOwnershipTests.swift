@@ -113,7 +113,7 @@ private final class DashboardWindowOwnershipTrackingWindow: NSWindow {
 }
 
 // Suite limits cap every test; the localized case bounds its child test process at 120 s.
-@Suite(.serialized, .timeLimit(.minutes(3)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct DashboardWindowOwnershipTests {
     static let primaryGateway = DashboardGatewayEntry(

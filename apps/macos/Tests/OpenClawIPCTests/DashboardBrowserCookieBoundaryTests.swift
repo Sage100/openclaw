@@ -36,7 +36,7 @@ private final class DashboardFixtureTrust: NSObject, WKNavigationDelegate {
     }
 }
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct DashboardBrowserCookieBoundaryTests {
     @Test(arguments: [false, true])

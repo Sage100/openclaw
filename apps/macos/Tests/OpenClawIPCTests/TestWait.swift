@@ -2,10 +2,9 @@ import Foundation
 import Observation
 import Testing
 
-/// Test waits have no deadline of their own. Suites that use them declare `.timeLimit`,
-/// whose clock starts when a test case runs rather than while it queues behind parallel
-/// tests, so a saturated runner delays these waits instead of failing them. A wait that
-/// the limit cancels records the stage it was still waiting for at the caller.
+/// Test waits have no deadline of their own. Suites that use them declare
+/// `.testWaitLimit`, so a saturated runner delays these waits instead of failing them.
+/// A wait that the limit cancels records the stage it was still waiting for at the caller.
 enum TestWait {
     /// Re-reads state that publishes no change signal every 10 ms until it holds: AppKit
     /// and accessibility trees, page script, transport state, or files another process
@@ -54,6 +53,16 @@ enum TestWait {
             Issue.record("Still waiting for \(stage)", sourceLocation: sourceLocation)
             throw CancellationError()
         }
+    }
+}
+
+extension Trait where Self == TimeLimitTrait {
+    /// Converts a lost signal into a failure well inside the 30-minute `macos-swift` job.
+    /// It bounds hangs, not speed: the clock skips parallel queueing but still counts time
+    /// queued on `TestIsolation` or a starved main actor, which took single tests up to
+    /// five minutes on a saturated three-core runner.
+    static var testWaitLimit: Self {
+        .timeLimit(.minutes(10))
     }
 }
 

@@ -16,7 +16,7 @@ private actor DashboardReconnectAuthGate {
     }
 }
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct DashboardReconnectTests {
     @Test func `primary discovery failure preserves commands owned by a pending picker`() async throws {

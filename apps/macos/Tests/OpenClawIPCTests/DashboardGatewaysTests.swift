@@ -250,7 +250,7 @@ struct DashboardGatewaysBridgeTests {
     }
 }
 
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct DashboardManagerGatewayTargetTests {
     @Test func `background configuration keeps the gateway profile registry cold`() async {

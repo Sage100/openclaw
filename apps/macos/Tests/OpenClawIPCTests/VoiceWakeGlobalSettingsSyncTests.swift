@@ -76,7 +76,7 @@ private actor VoiceWakeSyncRecorder {
     }
 }
 
-@Suite(.serialized, .timeLimit(.minutes(2)))
+@Suite(.serialized, .testWaitLimit)
 @MainActor
 struct VoiceWakeGlobalSettingsSyncTests {
     private func voiceWakeChangedEvent(payload: OpenClawProtocol.AnyCodable) -> EventFrame {
