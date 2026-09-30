@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { decodeXml } from "../shared/xml.js";
-import type { Skill } from "../skills/loading/skill-contract.js";
+import { decodeSkillXml, type Skill } from "../skills/loading/skill-contract.js";
 
 export type CodeModeSkill = {
   name: string;
@@ -20,7 +19,7 @@ const SKILL_LOCATION_PATTERN = /^[ ]{4}<location>(.*)<\/location>$/mu;
 
 function readSkillField(block: string, pattern: RegExp): string | undefined {
   const match = pattern.exec(block)?.[1];
-  return match === undefined ? undefined : decodeXml(match);
+  return match === undefined ? undefined : decodeSkillXml(match);
 }
 
 /** Select Code Mode skills from the exact catalog rendered into this run's prompt. */

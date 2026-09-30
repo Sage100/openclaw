@@ -1,13 +1,12 @@
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import { escapeXml } from "../../shared/xml.js";
 import { resolveEffectiveAgentSkillsLimits } from "../discovery/agent-filter.js";
 import { isSkillPromptVisible } from "../discovery/skill-index.js";
 import type { SkillEligibilityContext, SkillEntry, SkillSnapshot } from "../types.js";
 import { WORKSPACE_SKILLS_PROMPT_FORMAT_VERSION } from "../types.js";
 import { hasUnavailableSkillSecretOwners, isSkillSecretOwnerUnavailable } from "./config.js";
 import { resolveSkillKey } from "./frontmatter.js";
-import { compactSkillsPromptForContext } from "./skill-contract.js";
+import { compactSkillsPromptForContext, escapeSkillXml } from "./skill-contract.js";
 import { compactPromptSkills } from "./skill-paths.js";
 import { prepareSkillsForPrompt } from "./skill-prompt-limits.js";
 import { resolveWorkspaceSkillPromptEntries } from "./workspace-skill-loader.js";
@@ -135,7 +134,7 @@ async function resolveSkillsPromptCatalog(params: ResolveSkillsPromptParams): Pr
         .filter(
           (skill) => skill.skillKey !== undefined && isSkillSecretOwnerUnavailable(skill.skillKey),
         )
-        .map((skill) => escapeXml(skill.name)),
+        .map((skill) => escapeSkillXml(skill.name)),
     );
     if (unavailableNames.size === 0) {
       return snapshotPrompt;

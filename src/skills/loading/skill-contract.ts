@@ -29,6 +29,15 @@ export interface Skill {
 
 export { createSyntheticSourceInfo } from "../../agents/sessions/source-info.js";
 
+// Preserve the names and signatures in SDK-reachable namespace declarations.
+export function escapeSkillXml(str: string): string {
+  return escapeXml(str);
+}
+
+export function decodeSkillXml(value: string): string {
+  return decodeXml(value);
+}
+
 export const COMPACT_DESCRIPTION_MAX_CHARS = 220;
 
 function truncateSkillDescription(description: string, maxChars: number): string {
