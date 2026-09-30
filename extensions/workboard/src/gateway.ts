@@ -28,14 +28,30 @@ import { WorkboardStore } from "./store.js";
 const READ_SCOPE = "operator.read" as const;
 const WRITE_SCOPE = "operator.write" as const;
 
+/**
+ * Interactive Sessions-board writes wait in the store's mutation queue, so the
+ * caller's full Gateway authority (transport, role/scope/profile authorization,
+ * in-process lifetime) is rechecked immediately before the SQLite write.
+ */
 function sessionsBoardCaller(
-  hasCurrentClientAuthority: GatewayMethodContext["hasCurrentClientAuthority"],
+  context: Pick<
+    GatewayMethodContext,
+    | "hasCurrentClientAuthority"
+    | "sessionMutationAuthorization"
+    | "sessionAccessAuthority"
+    | "sessionMutationCommitGuard"
+    | "signal"
+  >,
 ) {
   return {
     assertCurrent() {
-      if (hasCurrentClientAuthority?.() === false) {
+      context.signal?.throwIfAborted();
+      if (context.hasCurrentClientAuthority?.() === false) {
         throw new Error("Caller authority is no longer active.");
       }
+      context.sessionAccessAuthority?.assertCurrent();
+      context.sessionMutationAuthorization?.assertCurrent();
+      context.sessionMutationCommitGuard?.();
     },
   };
 }
@@ -235,38 +251,35 @@ export function registerWorkboardGatewayMethods(params: {
     [
       "workboard.sessionsBoard.update",
       WRITE_SCOPE,
-      async ({ params: input, hasCurrentClientAuthority }: GatewayMethodContext) => {
+      async (context: GatewayMethodContext) => {
+        const input = context.params;
         const boardId = readStringParam(input, "boardId", { required: true });
         if (!isRecord(input.patch)) {
           throw new Error("patch must be an object.");
         }
         return {
-          board: await sessionsBoard().update(
-            boardId,
-            input.patch,
-            sessionsBoardCaller(hasCurrentClientAuthority),
-          ),
+          board: await sessionsBoard().update(boardId, input.patch, sessionsBoardCaller(context)),
         };
       },
     ],
     [
       "workboard.sessionsBoard.move",
       WRITE_SCOPE,
-      ({ params: input, hasCurrentClientAuthority }: GatewayMethodContext) =>
+      (context: GatewayMethodContext) =>
         sessionsBoard().move(
-          readStringParam(input, "boardId", { required: true }),
-          readStringParam(input, "sessionKey", { required: true }),
-          readStringParam(input, "columnId", { required: true }),
-          sessionsBoardCaller(hasCurrentClientAuthority),
+          readStringParam(context.params, "boardId", { required: true }),
+          readStringParam(context.params, "sessionKey", { required: true }),
+          readStringParam(context.params, "columnId", { required: true }),
+          sessionsBoardCaller(context),
         ),
     ],
     [
       "workboard.sessionsBoard.refresh",
       WRITE_SCOPE,
-      ({ params: input, hasCurrentClientAuthority }: GatewayMethodContext) =>
+      (context: GatewayMethodContext) =>
         sessionsBoard().refresh(
-          readStringParam(input, "boardId", { required: true }),
-          sessionsBoardCaller(hasCurrentClientAuthority),
+          readStringParam(context.params, "boardId", { required: true }),
+          sessionsBoardCaller(context),
         ),
     ],
   ]);

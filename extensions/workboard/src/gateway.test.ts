@@ -50,6 +50,23 @@ describe("workboard gateway methods", () => {
       message: "Caller authority is no longer active.",
     });
     expect(await store.getSessionsBoard("sessions")).toEqual(board);
+    // Role/scope/profile authorization is rechecked too, not just transport currentness.
+    const revokedRole = vi.fn();
+    await methods.get("workboard.sessionsBoard.update")!.handler({
+      params: { boardId: "sessions", patch: { instructions: "Scope revoked" } },
+      hasCurrentClientAuthority: () => true,
+      sessionMutationAuthorization: {
+        assertCurrent: () => {
+          throw new Error("operator scope revoked");
+        },
+      },
+      respond: revokedRole,
+    } as never);
+    expect(revokedRole).toHaveBeenCalledWith(false, undefined, {
+      code: "workboard_error",
+      message: "operator scope revoked",
+    });
+    expect(await store.getSessionsBoard("sessions")).toEqual(board);
   });
 
   it("rejects new client attachment bytes after disabling uploads without blocking agent output or reads", async () => {
