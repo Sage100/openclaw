@@ -5,7 +5,6 @@ import {
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import {
   copyReplyPayloadMetadata,
-  getReplyPayloadMetadata,
   type ReplyPayload,
   formatBtwTextForExternalDelivery,
 } from "../../auto-reply/reply-payload.js";
@@ -60,6 +59,7 @@ import {
 import {
   buildDeliveryResult,
   deliveryStatusFromDurableSend,
+  selectSourceDeliverablePayloads,
   noVisiblePayloadStatus,
   preDeliveryFailureStatus,
   type AgentCommandDeliveryResult,
@@ -367,11 +367,8 @@ export async function deliverAgentCommandResult(
     resolveDefaultAgentId(cfg);
   const deliveryRequested = opts.deliver === true;
   const sourcePayloads =
-    deliveryRequested && opts.sourceReplyDeliveryMode === "message_tool_only"
-      ? params.payloads?.filter(
-          (payload) =>
-            getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression === true,
-        )
+    deliveryRequested && params.payloads
+      ? selectSourceDeliverablePayloads(params.payloads, opts.sourceReplyDeliveryMode)
       : params.payloads;
   const suppressAutomaticDelivery =
     deliveryRequested &&

@@ -1,3 +1,5 @@
+import type { SourceReplyDeliveryMode } from "../../auto-reply/get-reply-options.types.js";
+import { getReplyPayloadMetadata, type ReplyPayload } from "../../auto-reply/reply-payload.js";
 import type { NormalizeReplySkipReason } from "../../auto-reply/reply/normalize-reply.js";
 import type {
   sendDurableMessageBatchCore,
@@ -181,4 +183,17 @@ export function noVisiblePayloadStatus(
     reason: reason === "channel_transform" ? reason : "no_visible_payload",
     resultCount: 0,
   };
+}
+
+/** Payloads a tool-only source may still receive: only host-granted ones (diagnostics, media). */
+export function selectSourceDeliverablePayloads<T extends ReplyPayload>(
+  payloads: T[],
+  mode: SourceReplyDeliveryMode | undefined,
+): T[] {
+  return mode === "message_tool_only"
+    ? payloads.filter(
+        (payload) =>
+          getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression === true,
+      )
+    : payloads;
 }
