@@ -2063,16 +2063,13 @@ describe("Claude session catalog", () => {
 
   it("retries an unchanged tree after project-root canonicalization recovers", async () => {
     const home = await createHome();
+    // Keep the injected failure in catalog scanning, outside watcher admission.
+    createClaudeCatalogWatchDriver(home);
     const projectRoot = path.join(home, ".claude", "projects");
     await writeUnindexedCliSessions(home, { recovered: "Recovered" });
-    const realpath = fs.realpath.bind(fs);
-    let failRoot = true;
-    vi.spyOn(fs, "realpath").mockImplementation(async (...args) => {
-      if (failRoot && args[0] === projectRoot) {
-        failRoot = false;
-        throw new Error("transient realpath failure");
-      }
-      return await realpath(...args);
+    vi.spyOn(fs, "realpath").mockImplementationOnce(async (target) => {
+      expect(target).toBe(projectRoot);
+      throw new Error("transient realpath failure");
     });
 
     await expect(listLocalClaudeSessionPage({}, home)).resolves.toEqual({ sessions: [] });
@@ -2555,7 +2552,7 @@ describe("Claude session catalog", () => {
 
     await fs.rm(transcriptPath);
     await fs.utimes(projectDir, fixedTime, fixedTime);
-    watches.change(transcriptPath, "rename");
+    watches.change(transcriptPath);
     expect((await listLocalClaudeSessionPage({}, home)).sessions).toEqual([]);
     await fs.writeFile(transcriptPath, `${JSON.stringify(sdkCliMessage(sessionId, "Bravo"))}\n`);
     await fs.utimes(transcriptPath, fixedTime, fixedTime);
@@ -2567,7 +2564,7 @@ describe("Claude session catalog", () => {
     });
     const openSpy = vi.spyOn(fs, "open");
 
-    watches.change(transcriptPath, "rename");
+    watches.change(transcriptPath);
     expect((await listLocalClaudeSessionPage({}, home)).sessions).toEqual([
       expect.objectContaining({ threadId: sessionId, name: "Bravo" }),
     ]);
