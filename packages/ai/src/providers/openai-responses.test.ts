@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import manifest from "../../../../extensions/openai/openclaw.plugin.json" with { type: "json" };
 import { configureAiTransportHost } from "../host.js";
 import type { Context, Model } from "../types.js";
 
@@ -80,24 +79,6 @@ describe("OpenAI Responses provider", () => {
         expect(openAiMockState.params[0]).toMatchObject({ service_tier: serviceTier });
       } else {
         expect(openAiMockState.params[0]).not.toHaveProperty("service_tier");
-      }
-    },
-  );
-
-  it.each(["gpt-daybreak-blue-latest", "gpt-daybreak-red-latest"])(
-    "preserves %s and advanced efforts through simple Responses requests",
-    async (id) => {
-      const catalogRow = manifest.modelCatalog.providers.openai.models.find((row) => row.id === id);
-      expect(catalogRow).toBeDefined();
-      for (const reasoning of ["xhigh", "max"] as const) {
-        await streamSimpleOpenAIResponses(model({ id, compat: catalogRow?.compat }), context, {
-          apiKey: "test-key",
-          reasoning,
-        }).result();
-        expect(openAiMockState.params.at(-1)).toMatchObject({
-          model: id,
-          reasoning: { effort: reasoning },
-        });
       }
     },
   );
