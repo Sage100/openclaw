@@ -314,7 +314,7 @@ describeControlUiE2e("Control UI initial connect splash E2E", () => {
           .locator(".content--chat")
           .evaluate(async (root, viewportHeight) => {
             // setViewportSize resolves before the rendering update in which the shell viewport
-            // owner publishes the new canvas height; a grown viewport keeps the old canvas until then.
+            // owner publishes the new canvas height; until then a grown viewport keeps the old one.
             const canvas = document.querySelector("openclaw-app")!;
             await new Promise<void>((resolve) => {
               const observer = new ResizeObserver(() => {
