@@ -2,7 +2,8 @@
 import { expectDefined } from "@openclaw/normalization-core";
 import { isToolResultError } from "openclaw/plugin-sdk/agent-harness-runtime";
 import { Value } from "typebox/value";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { startEmptySessionsBoardService } from "./test/sessions-board.js";
 import {
   createWorkboardSqliteTestHarness,
   createWorkboardSqliteTestStore,
@@ -15,6 +16,59 @@ function readPayload(result: unknown): Record<string, unknown> {
 }
 
 describe("workboard tools", () => {
+  it("defaults Sessions board tools only when one Sessions board exists", async () => {
+    vi.useFakeTimers();
+    const store = createWorkboardSqliteTestStore();
+    const sessionsBoard = await startEmptySessionsBoardService(store);
+    try {
+      const tools = new Map(
+        createWorkboardTools({ store, sessionsBoard }).map((tool) => [tool.name, tool]),
+      );
+      const read = expectDefined(tools.get("workboard_sessions_board_read"), "Sessions board read");
+      const update = expectDefined(
+        tools.get("workboard_sessions_board_update"),
+        "Sessions board update",
+      );
+      const move = expectDefined(tools.get("workboard_sessions_board_move"), "Sessions board move");
+      await expect(read.execute("none", {})).rejects.toThrow("No Sessions board exists");
+      const create = expectDefined(tools.get("workboard_board_create"), "Board create");
+      expect(Value.Check(create.parameters, { id: "sessions", kind: "sessions" })).toBe(true);
+      await create.execute("create", { id: "sessions", name: "My sessions", kind: "sessions" });
+      expect(readPayload(await read.execute("one", {}))).toMatchObject({
+        board: { id: "sessions", kind: "sessions" },
+        sessions: [],
+      });
+      await update.execute("update-one", { instructions: "Highlight approvals." });
+      await expect(store.getSessionsBoard("sessions")).resolves.toMatchObject({
+        sessions: { instructions: "Highlight approvals." },
+      });
+      await store.upsertBoard({ id: "another", kind: "sessions" });
+      for (const [tool, input] of [
+        [read, {}],
+        [update, { instructions: "Ambiguous target." }],
+        [move, { sessionKey: "agent:main:example", columnId: "working" }],
+      ] as const) {
+        await expect(tool.execute("ambiguous", input)).rejects.toThrow(
+          "boardId is required when more than one Sessions board exists",
+        );
+      }
+      expect(readPayload(await read.execute("explicit", { boardId: "another" }))).toMatchObject({
+        board: { id: "another", kind: "sessions" },
+      });
+      await create.execute("create-cards", { id: "cards", kind: "cards" });
+      await expect(read.execute("cards", { boardId: "cards" })).rejects.toThrow(
+        "This board is not a Sessions board.",
+      );
+      await expect(read.execute("invalid", { boardId: 42 })).rejects.toThrow();
+      await expect(store.getSessionsBoard("sessions")).resolves.toMatchObject({
+        sessions: { instructions: "Highlight approvals." },
+      });
+    } finally {
+      await sessionsBoard.stop();
+      vi.useRealTimers();
+    }
+  });
+
   it("inherits the active tool filesystem boundary for workspace metadata", async () => {
     const store = createWorkboardSqliteTestStore();
     const restrictedContext = {

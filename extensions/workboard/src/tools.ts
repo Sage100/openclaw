@@ -3,6 +3,7 @@ import { jsonResult, readStringParam } from "openclaw/plugin-sdk/core";
 import type { AnyAgentTool, OpenClawPluginToolContext } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "typebox";
 import { redactClaimToken } from "./card-redaction.js";
+import type { WorkboardSessionsBoardService } from "./sessions-board.js";
 import type { WorkboardStore } from "./store.js";
 import {
   cardIdField,
@@ -12,6 +13,7 @@ import {
   workspaceField,
 } from "./tools-card-mutations.js";
 import { createWorkboardOrchestrationTools } from "./tools-orchestration.js";
+import { createWorkboardSessionsBoardTools } from "./tools-sessions-board.js";
 
 function contextOwner(ctx: OpenClawPluginToolContext | undefined): string {
   return ctx?.agentId || ctx?.sessionKey || ctx?.sessionId || "agent";
@@ -96,6 +98,7 @@ const CardIdSchema = strictObject({
 export function createWorkboardTools(params: {
   context?: OpenClawPluginToolContext;
   store: WorkboardStore;
+  sessionsBoard?: Pick<WorkboardSessionsBoardService, "read" | "update" | "move" | "refresh">;
 }): AnyAgentTool[] {
   const { store } = params;
   const ownerId = contextOwner(params.context);
@@ -147,7 +150,7 @@ export function createWorkboardTools(params: {
       name: "workboard_create",
       label: "Workboard Create",
       description:
-        "Create a Workboard card, optionally with parent dependencies, tenant, skills, workspace, and idempotency key.",
+        "Create a Workboard card, optionally with parent dependencies, tenant, skills, workspace, and idempotency key. Sessions boards do not hold cards; use workboard_sessions_board_read/update/move for them.",
       parameters: strictObject({
         title: Type.String({ description: "Card title." }),
         notes: Type.Optional(Type.String({ description: "Card notes or acceptance criteria." })),
@@ -443,6 +446,7 @@ export function createWorkboardTools(params: {
       ),
     },
     ...createWorkboardOrchestrationTools({ store, ownerId }),
+    ...createWorkboardSessionsBoardTools({ store, sessionsBoard: params.sessionsBoard }),
   ];
   for (const tool of tools) {
     const execute = tool.execute;

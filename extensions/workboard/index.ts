@@ -9,6 +9,7 @@ import {
   syncWorkboardAgentEnded,
   syncWorkboardSubagentEnded,
 } from "./src/lifecycle-sync.js";
+import { createWorkboardSessionsBoardService } from "./src/sessions-board.js";
 import { resolveWorkboardSqliteWorkerModuleUrl } from "./src/sqlite-store-paths.js";
 import { registerWorkboardStoreLifecycle } from "./src/store-lifecycle.js";
 import { WorkboardStore } from "./src/store.js";
@@ -36,11 +37,22 @@ export default definePluginEntry({
       store,
     });
     resourceServices.push(automationNudge);
+    const sessionsBoard = createWorkboardSessionsBoardService({
+      store,
+      gateway: api.runtime.gateway,
+    });
+    resourceServices.push(sessionsBoard);
+    const refreshSessionsBoards = () => {
+      void sessionsBoard.sweep().catch((error: unknown) => {
+        api.logger.warn(`workboard sessions sweep failed: ${String(error)}`);
+      });
+    };
     const lifecycleSync = createWorkboardLifecycleService({
       store,
       worktrees: api.runtime.worktrees,
       readSessions: async (options) =>
         await readWorkboardLifecycleSessions(api.runtime.gateway, options),
+      onSweep: refreshSessionsBoards,
     });
     resourceServices.push(lifecycleSync);
     api.session.controls.registerControlUiDescriptor({
@@ -70,10 +82,11 @@ export default definePluginEntry({
       label: "Workboard summary",
       requiredScopes: ["operator.read"],
     });
-    registerWorkboardGatewayMethods({ api, store });
+    registerWorkboardGatewayMethods({ api, store, sessionsBoard });
     registerWorkboardCommand({ api, store });
     api.registerService(changeEvents);
     api.registerService(automationNudge);
+    api.registerService(sessionsBoard);
     api.registerService(lifecycleSync);
     api.on("gateway_start", (_event, context) => lifecycleSync.onGatewayStart(context.abortSignal));
     api.on("gateway_stop", () => lifecycleSync.onGatewayStop());
@@ -85,6 +98,7 @@ export default definePluginEntry({
           event,
           onMatched: automationNudge.nudge,
         });
+        refreshSessionsBoards();
       }),
     );
     api.on("agent_end", (event, context) =>
@@ -95,6 +109,7 @@ export default definePluginEntry({
           context,
           onMatched: automationNudge.nudge,
         });
+        refreshSessionsBoards();
       }),
     );
     api.registerCli(
@@ -115,7 +130,7 @@ export default definePluginEntry({
     api.registerTool(
       (context) =>
         guardWorkboardToolsForWorkspaceAccess(
-          createWorkboardTools({ context, store }),
+          createWorkboardTools({ context, store, sessionsBoard }),
           context,
           api.runtime.sandbox.resolveWorkspaceAuthority,
         ),

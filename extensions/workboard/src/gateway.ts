@@ -1,4 +1,6 @@
 import type { WorkboardCard } from "@openclaw/workboard-contract";
+import { readStringParam } from "openclaw/plugin-sdk/core";
+import { isRecord } from "openclaw/plugin-sdk/string-coerce-runtime";
 import type { OpenClawPluginApi } from "../api.js";
 import { redactClaimToken } from "./card-redaction.js";
 import {
@@ -18,6 +20,7 @@ import {
   registerWorkboardWorkspaceCardMethods,
   registerWorkboardWorkspaceWorkflowMethods,
 } from "./gateway-workspace-methods.js";
+import type { WorkboardSessionsBoardService } from "./sessions-board.js";
 import { resolveWorkboardSqliteWorkerModuleUrl } from "./sqlite-store-paths.js";
 import { registerWorkboardStoreLifecycle } from "./store-lifecycle.js";
 import { WorkboardStore } from "./store.js";
@@ -53,6 +56,7 @@ function cardMutation(
 export function registerWorkboardGatewayMethods(params: {
   api: OpenClawPluginApi;
   store?: WorkboardStore;
+  sessionsBoard?: Pick<WorkboardSessionsBoardService, "read" | "update" | "move" | "refresh">;
 }) {
   const { api: hostApi } = params;
   const assertUploadsAllowed = (client: GatewayMethodContext["client"]) => {
@@ -202,6 +206,48 @@ export function registerWorkboardGatewayMethods(params: {
   ]);
 
   registerWorkboardWorkspaceBoardMethod({ api, store });
+
+  const sessionsBoard = () => {
+    if (!params.sessionsBoard) {
+      throw new Error("Sessions board service is unavailable.");
+    }
+    return params.sessionsBoard;
+  };
+  registerWorkboardResultMethods(api, [
+    [
+      "workboard.sessionsBoard.read",
+      READ_SCOPE,
+      ({ params: input }) =>
+        sessionsBoard().read(readStringParam(input, "boardId", { required: true })),
+    ],
+    [
+      "workboard.sessionsBoard.update",
+      WRITE_SCOPE,
+      async ({ params: input }) => {
+        const boardId = readStringParam(input, "boardId", { required: true });
+        if (!isRecord(input.patch)) {
+          throw new Error("patch must be an object.");
+        }
+        return { board: await sessionsBoard().update(boardId, input.patch) };
+      },
+    ],
+    [
+      "workboard.sessionsBoard.move",
+      WRITE_SCOPE,
+      ({ params: input }) =>
+        sessionsBoard().move(
+          readStringParam(input, "boardId", { required: true }),
+          readStringParam(input, "sessionKey", { required: true }),
+          readStringParam(input, "columnId", { required: true }),
+        ),
+    ],
+    [
+      "workboard.sessionsBoard.refresh",
+      WRITE_SCOPE,
+      ({ params: input }) =>
+        sessionsBoard().refresh(readStringParam(input, "boardId", { required: true })),
+    ],
+  ]);
 
   registerWorkboardResultMethods(api, [
     [

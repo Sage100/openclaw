@@ -164,6 +164,7 @@ export type WorkboardReclaimInput = {
 };
 export type WorkboardBoardInput = {
   id?: unknown;
+  kind?: unknown;
   name?: unknown;
   description?: unknown;
   icon?: unknown;
