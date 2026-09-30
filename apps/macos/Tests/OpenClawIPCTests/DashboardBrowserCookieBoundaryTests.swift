@@ -119,7 +119,7 @@ struct DashboardBrowserCookieBoundaryTests {
             "/other-worker",
         ]
         let expected = same + different
-        try await DashboardTestWait.state("cookie boundary requests") {
+        try await TestWait.state("cookie boundary requests") {
             expected.allSatisfy { requests[$0] != nil }
         }
         for path in expected {

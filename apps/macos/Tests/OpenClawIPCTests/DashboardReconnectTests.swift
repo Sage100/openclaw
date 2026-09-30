@@ -101,7 +101,7 @@ struct DashboardReconnectTests {
             var samples = 0
             var observation = "not sampled"
             try await DashboardTestWait.document(replacement, "replacement document")
-            try await DashboardTestWait.state("replacement command delivery") {
+            try await TestWait.state("replacement command delivery") {
                 samples += 1
                 do {
                     let received = try await replacement.webView.evaluateJavaScript("window.commandEvents") as? [String]

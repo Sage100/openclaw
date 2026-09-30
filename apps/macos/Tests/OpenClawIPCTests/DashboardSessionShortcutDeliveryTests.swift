@@ -66,7 +66,7 @@ struct DashboardSessionShortcutDeliveryTests {
         if !window.performKeyEquivalent(with: event) {
             window.sendEvent(event)
         }
-        try await DashboardTestWait.state("\(chord.key) delivery to \(target)") {
+        try await TestWait.state("\(chord.key) delivery to \(target)") {
             try await !self.keyEvents(in: controller.webView).isEmpty
         }
         let observed = try await self.keyEvents(in: controller.webView)
