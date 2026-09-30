@@ -41,6 +41,7 @@ type SessionsBoardServiceParams = {
 type BoardState = {
   facts: WorkboardSessionFacts[];
   checkedAt: number;
+  lastReadAt: number;
   specHash?: string;
   warning?: string;
   failed: boolean;
@@ -62,7 +63,8 @@ type Operations = {
     columnId: string,
   ) => Promise<WorkboardSessionsBoardRead>;
   refresh: (boardId: string) => Promise<WorkboardSessionsBoardRead>;
-  sweep: () => Promise<void>;
+  /** Reclassify every active Sessions board, or only boards read within `viewedWithinMs`. */
+  sweep: (options?: { viewedWithinMs?: number }) => Promise<void>;
 };
 export type WorkboardSessionsBoardService = OpenClawPluginService &
   Operations & { stop: () => Promise<void> };
@@ -155,6 +157,7 @@ function createOwner(
       state = {
         facts: [],
         checkedAt: -Infinity,
+        lastReadAt: -Infinity,
         lastModelAt: -Infinity,
         failed: false,
         forceRequested: false,
@@ -421,6 +424,7 @@ function createOwner(
     assertCurrent();
     const board = await params.store.getSessionsBoard(id);
     const state = stateFor(id);
+    state.lastReadAt = now();
     if (state.specHash !== sessionsBoardSpecHash(board) || now() - state.checkedAt >= 60_000) {
       void schedule(id);
     }
@@ -530,7 +534,7 @@ function createOwner(
       void schedule(id, true);
       return await read(id);
     },
-    sweep: () =>
+    sweep: (options) =>
       runAsService(async () => {
         if (lifetime.signal.aborted || !isCurrent() || !(await params.gateway.isAvailable())) {
           return;
@@ -547,7 +551,16 @@ function createOwner(
             boards.delete(id);
           }
         }
-        await Promise.all(current.map((board) => schedule(board.id)));
+        const viewedWithinMs = options?.viewedWithinMs;
+        await Promise.all(
+          current
+            .filter(
+              (board) =>
+                viewedWithinMs === undefined ||
+                now() - stateFor(board.id).lastReadAt <= viewedWithinMs,
+            )
+            .map((board) => schedule(board.id)),
+        );
       }),
   };
 }
@@ -590,6 +603,6 @@ export function createWorkboardSessionsBoardService(
     update: (id, patch) => current().update(id, patch),
     move: (id, key, column) => current().move(id, key, column),
     refresh: (id) => current().refresh(id),
-    sweep: () => activeState().owner?.sweep() ?? Promise.resolve(),
+    sweep: (options) => activeState().owner?.sweep(options) ?? Promise.resolve(),
   };
 }

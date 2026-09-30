@@ -194,6 +194,35 @@ describe("Sessions board classification service", () => {
     );
   });
 
+  it("keeps unviewed boards quiet during background sweeps and ignores activity ticks", async () => {
+    await withService(
+      {
+        facts: [
+          facts("one", { observerDigest: { health: "stuck", headline: "Stuck", revision: 1 } }),
+        ],
+      },
+      async ({ service, state, request, readSessionFacts, complete, store }) => {
+        await service.sweep({ viewedWithinMs: 60_000 });
+        expect(request).not.toHaveBeenCalled();
+        expect(readSessionFacts).not.toHaveBeenCalled();
+        await service.read(BOARD_ID);
+        await service.sweep({ viewedWithinMs: 60_000 });
+        expect(readSessionFacts).toHaveBeenCalled();
+        const classified = await store.listSessionPlacements(BOARD_ID);
+        expect(classified).toHaveLength(1);
+        state.facts = [facts("one", { ...state.facts[0], lastActivityAt: NOW + 5_000 })];
+        vi.setSystemTime(NOW + 30_000);
+        await service.sweep({ viewedWithinMs: 60_000 });
+        expect(await store.listSessionPlacements(BOARD_ID)).toEqual(classified);
+        expect(complete).toHaveBeenCalledOnce();
+        vi.setSystemTime(NOW + 120_000);
+        readSessionFacts.mockClear();
+        await service.sweep({ viewedWithinMs: 60_000 });
+        expect(readSessionFacts).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   it("fits model output into eight-session batches spaced at least 30 seconds apart", async () => {
     const callTimes: number[] = [];
     await withService(

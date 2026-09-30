@@ -166,7 +166,10 @@ the dock's `agentSessionKey`; move additionally requires `sessionKey` and
 `workboard_board_create`. Changing an existing board's kind is rejected.
 
 Classification reuses Workboard's minute session sweep and agent completion
-hooks. Only changed session facts or board specs need reclassification. Facts
+hooks, but only for boards that an operator or tool read within the last 15
+minutes; an unviewed board costs nothing until it is opened again. Only changed
+session facts or board specs need reclassification; activity timestamps alone do
+not count as a change, so pins survive ordinary session activity. Facts
 reads batch at most 40 sessions. Utility requests classify at most eight sessions
 per call to fit the 600-token response cap, with at least 30 seconds between
 calls for each board. Larger boards classify in the background while prior

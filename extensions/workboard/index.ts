@@ -9,6 +9,7 @@ import {
   syncWorkboardAgentEnded,
   syncWorkboardSubagentEnded,
 } from "./src/lifecycle-sync.js";
+import { SESSIONS_BOARD_VIEWER_IDLE_MS } from "./src/sessions-board-classification.js";
 import { createWorkboardSessionsBoardService } from "./src/sessions-board.js";
 import { resolveWorkboardSqliteWorkerModuleUrl } from "./src/sqlite-store-paths.js";
 import { registerWorkboardStoreLifecycle } from "./src/store-lifecycle.js";
@@ -43,9 +44,12 @@ export default definePluginEntry({
     });
     resourceServices.push(sessionsBoard);
     const refreshSessionsBoards = () => {
-      void sessionsBoard.sweep().catch((error: unknown) => {
-        api.logger.warn(`workboard sessions sweep failed: ${String(error)}`);
-      });
+      // Sessions boards nobody reads stay quiet: no session-facts or utility-model work.
+      void sessionsBoard
+        .sweep({ viewedWithinMs: SESSIONS_BOARD_VIEWER_IDLE_MS })
+        .catch((error: unknown) => {
+          api.logger.warn(`workboard sessions sweep failed: ${String(error)}`);
+        });
     };
     const lifecycleSync = createWorkboardLifecycleService({
       store,

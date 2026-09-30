@@ -67,8 +67,15 @@ export function createSessionsBoardCompletion() {
                   description,
                 })),
                 instructions: input.board.sessions.instructions ?? "",
+                // Placement evidence only; identities and timestamps are noise to the model.
                 sessions: input.sessions.map((session) => ({
-                  ...session,
+                  sessionKey: session.key,
+                  agentId: session.agentId,
+                  title: session.label ?? session.derivedTitle,
+                  run: session.run,
+                  observerDigest: session.observerDigest,
+                  pullRequests: session.pullRequests,
+                  archived: session.archived,
                   lastMessagePreview: session.lastMessagePreview
                     ? redactToolPayloadText(session.lastMessagePreview).slice(0, 600)
                     : undefined,

@@ -11,6 +11,8 @@ export const SESSIONS_BOARD_BATCH_SIZE = 40;
 // Full session keys, column ids and short reasons must fit the 600-token response.
 export const SESSIONS_BOARD_MODEL_BATCH_SIZE = 8;
 export const SESSIONS_BOARD_MODEL_INTERVAL_MS = 30_000;
+// Background sweeps only keep boards fresh that an operator or tool read recently.
+export const SESSIONS_BOARD_VIEWER_IDLE_MS = 15 * 60_000;
 
 function hash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -40,8 +42,8 @@ export function sessionFactsHash(facts: WorkboardSessionFacts): string {
         }
       : undefined,
     pullRequestsUnavailable: facts.pullRequestsUnavailable === true,
+    // Activity time only scopes a session; hashing it would retire pins on every tick.
     archived: facts.archived,
-    lastActivityAt: facts.lastActivityAt,
     pullRequests: facts.pullRequests.toSorted(
       (left, right) => left.number - right.number || left.state.localeCompare(right.state),
     ),
