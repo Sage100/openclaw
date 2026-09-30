@@ -181,6 +181,7 @@ export type CatalogSessionMenuRequest = {
   canOpenTerminal: boolean;
   canDelete: boolean;
   name: string;
+  displayName?: string;
   meta: string;
 };
 

@@ -446,6 +446,59 @@ export function registerStatusHealthSessionsCommands(program: Command) {
   registerSessionsLifecycleCommand(sessionsCmd, "archive");
   registerSessionsLifecycleCommand(sessionsCmd, "delete");
 
+  addSessionsGatewayOptions(sessionsCmd.command("import [catalogId] [threadId]"))
+    .description("Preserve native catalog transcripts in ordinary OpenClaw sessions")
+    .option("--all", "Import every visible catalog session, paging each source", false)
+    .option("--catalog <id>", "Catalog to import with --all (for example: claude or codex)")
+    .option("--host <hostId>", "Source host (single transcript default: discover the Gateway host)")
+    .option("--source-home <id>", "Source home for a single transcript")
+    .option("--limit <n>", "Maximum number of sessions to import with --all")
+    .option("--dry-run", "List the transcripts that would be imported without writing", false)
+    .addHelpText(
+      "after",
+      () =>
+        `\n${theme.heading("Examples:")}\n${formatHelpExamples([
+          ["openclaw sessions import claude <thread-id>", "Preserve a Claude Code transcript."],
+          ["openclaw sessions import codex <thread-id>", "Preserve a Codex transcript."],
+          ["openclaw sessions import --all --json", "Import or sync every visible transcript."],
+          [
+            "openclaw sessions import --all --catalog claude --limit 20 --dry-run",
+            "Preview a bounded Claude Code import.",
+          ],
+        ])}`,
+    )
+    .action(async (catalogId: string | undefined, threadId: string | undefined, opts, command) => {
+      const parentOpts = command.parent?.opts() as SessionsListCliOptions | undefined;
+      rejectUnsupportedSessionsParentOptions(
+        "import",
+        parentOpts,
+        ["store", "allAgents", "active", "limit", "verbose"],
+        "catalog imports use Gateway sources; pass --limit after import to bound --all",
+      );
+      await runCommandWithRuntime(defaultRuntime, async () => {
+        const { sessionsImportCommand } = await import("../sessions-import.js");
+        await sessionsImportCommand(
+          {
+            catalogId,
+            threadId,
+            all: Boolean(opts.all),
+            catalog: opts.catalog as string | undefined,
+            host: opts.host as string | undefined,
+            sourceHome: opts.sourceHome as string | undefined,
+            agent: (opts.agent as string | undefined) ?? parentOpts?.agent,
+            limit: opts.limit as string | undefined,
+            dryRun: Boolean(opts.dryRun),
+            timeout: opts.timeout as string | undefined,
+            url: opts.url as string | undefined,
+            token: opts.token as string | undefined,
+            password: opts.password as string | undefined,
+            json: Boolean(opts.json || parentOpts?.json),
+          },
+          defaultRuntime,
+        );
+      });
+    });
+
   addSessionsGatewayOptions(sessionsCmd.command("compact <key>"))
     .description("Compact a stored session transcript via the running gateway")
     .option(
