@@ -104,6 +104,30 @@ describe("channel turn pipeline", () => {
     resetLogger();
   });
 
+  it("forwards adoption to the assembled dispatcher after recording", async () => {
+    const events: string[] = [];
+    const onAdopted = vi.fn(async () => {
+      events.push("adopted");
+    });
+    const turnAdoptionLifecycle = { onAdopted };
+    const dispatch = vi.fn<DispatchReplyWithBufferedBlockDispatcher>(async (params) => {
+      events.push("dispatch");
+      expect(params.replyOptions?.turnAdoptionLifecycle).toBe(turnAdoptionLifecycle);
+      await params.replyOptions?.turnAdoptionLifecycle?.onAdopted();
+      return { queuedFinal: true, counts: { tool: 0, block: 0, final: 1 } };
+    });
+
+    const result = await dispatchTestAssembledTurn({
+      recordInboundSession: createRecordInboundSession(events),
+      dispatchReplyWithBufferedBlockDispatcher: dispatch,
+      turnAdoptionLifecycle,
+    });
+
+    expectDispatched(result);
+    expect(events).toEqual(["record", "dispatch", "adopted"]);
+    expect(onAdopted).toHaveBeenCalledOnce();
+  });
+
   it("does not emit a second failure when a post-send observer throws", async () => {
     const observerError = new Error("observer failed");
     const onError = vi.fn();

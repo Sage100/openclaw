@@ -220,6 +220,57 @@ describe("custodian page", () => {
     expect(page.textContent).not.toContain("Live welcome");
   });
 
+  it("resolves a pending ordinary turn from durable history after client replacement", async () => {
+    const pending = createDeferred<Reply>();
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ turns: [] })
+      .mockResolvedValueOnce(chatReply("Welcome."))
+      .mockReturnValueOnce(pending.promise);
+    const replacementRequest = vi.fn((method: string, params: { sessionId?: string }) =>
+      Promise.resolve(
+        method === "openclaw.chat.history"
+          ? {
+              turns: [
+                { role: "user", text: "check this system", at: 1 },
+                { role: "assistant", text: "System check completed", at: 2 },
+              ],
+            }
+          : chatReply("Welcome back.", { sessionId: params.sessionId }),
+      ),
+    );
+    const { context, setGatewaySnapshot } = createContext(request, [
+      "openclaw.chat",
+      "openclaw.chat.history",
+    ]);
+    const { page } = await mountPage(context);
+    await waitForFast(() => expect(request).toHaveBeenCalledTimes(2));
+    await fill(page, "textarea", "check this system");
+    button(page, ".chat-send-btn").click();
+    await waitForFast(() => expect(request).toHaveBeenCalledTimes(3));
+    expect(request.mock.calls[2]?.[1]).toMatchObject({
+      sessionId: "custodian-session",
+      message: "check this system",
+    });
+    setGatewaySnapshot({
+      client: { request: replacementRequest } as unknown as GatewayBrowserClient,
+    });
+    await waitForFast(() => expect(page.textContent).toContain("System check completed"));
+    expect(replacementRequest.mock.calls.map(([method]) => method)).toEqual([
+      "openclaw.chat.history",
+      "openclaw.chat",
+      "openclaw.chat.history",
+    ]);
+    expect(replacementRequest.mock.calls[1]?.[1]).toMatchObject({ sessionId: "custodian-session" });
+    expect(replacementRequest.mock.calls[1]?.[1]).not.toHaveProperty("message");
+    expect(page.querySelector('[role="alert"]')).toBeNull();
+    pending.resolve(chatReply("Stale old-client reply."));
+    await pending.promise;
+    await page.updateComplete;
+    expect(page.textContent).not.toContain("Stale old-client reply.");
+    expect(page.textContent).toContain("System check completed");
+  });
+
   it("keeps loaded transcript rows while retrying the welcome without reloading history", async () => {
     const request = vi
       .fn()

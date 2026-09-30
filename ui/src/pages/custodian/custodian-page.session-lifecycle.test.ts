@@ -98,6 +98,11 @@ describe("custodian page session lifecycle", () => {
       if (action === "submit") {
         expect(sent.wizardAnswer.value).toBe(secret);
       } else {
+        expect(sent).toMatchObject({
+          sessionId: "engine-session",
+          wizardCancel: { stepId: "credential" },
+        });
+        expect(sent).not.toHaveProperty("message");
         expect(JSON.stringify(sent)).not.toContain(secret);
       }
     },
@@ -179,6 +184,45 @@ describe("custodian page session lifecycle", () => {
     expect(request.mock.calls[2]?.[1]?.sessionId).not.toBe("engine-session");
     expect(page.querySelector(".custodian__wizard-step")).toBeNull();
   });
+
+  it.each([false, true])(
+    "keeps the live session after a failed ordinary send (sent=%s)",
+    async (sent) => {
+      const request = vi
+        .fn()
+        .mockResolvedValueOnce(reply("Ready."))
+        .mockImplementationOnce((_method, _params, options?: { onSent?: () => void }) => {
+          if (sent) {
+            options?.onSent?.();
+          }
+          return Promise.reject(
+            new GatewayProtocolRequestError({
+              code: "UNAVAILABLE",
+              message: "Temporary request failure.",
+            }),
+          );
+        })
+        .mockResolvedValueOnce(reply("Still together."));
+      const page = await mount(request);
+      await input(page, "first try");
+      click(page, ".chat-send-btn");
+      await waitForFast(() => expect(page.textContent).toContain("Temporary request failure."));
+      expect(page.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe(
+        sent ? "" : "first try",
+      );
+      expect(page.store.messages.filter((message) => message.role === "user")).toHaveLength(
+        sent ? 1 : 0,
+      );
+      await input(page, "second try");
+      click(page, ".chat-send-btn");
+      await waitForFast(() => expect(page.textContent).toContain("Still together."));
+      expect(request).toHaveBeenCalledTimes(3);
+      expect(request.mock.calls[2]?.[1]).toMatchObject({
+        sessionId: "engine-session",
+        message: "second try",
+      });
+    },
+  );
 
   it("stops after one rotation when the fresh session failure is also marked", async () => {
     const request = vi

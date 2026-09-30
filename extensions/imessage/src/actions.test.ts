@@ -397,6 +397,23 @@ describe("imessage message actions", () => {
     );
   });
 
+  it("rejects ambiguous SSH wrappers before editing", async () => {
+    bridge({ editMessage: true });
+    remoteHostMock.resolve.mockRejectedValueOnce(
+      new Error(
+        "iMessage SSH cliPath wrapper is not the simple transparent form; configure channels.imessage.remoteHost explicitly.",
+      ),
+    );
+    await expect(
+      run(
+        "edit",
+        { ...message, text: "updated text" },
+        { cfg: { channels: { imessage: { cliPath: "/gateway/imsg-proxy-wrapper" } } } },
+      ),
+    ).rejects.toThrow("configure channels.imessage.remoteHost explicitly");
+    expect(runtimeMock.editMessage).not.toHaveBeenCalled();
+  });
+
   it("warns and rejects when probing finds the private bridge unavailable", async () => {
     probeMock.getCachedIMessagePrivateApiStatus.mockReturnValue(undefined);
     probeMock.probeIMessagePrivateApi.mockResolvedValue({

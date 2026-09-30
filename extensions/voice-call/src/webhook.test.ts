@@ -528,6 +528,39 @@ describe("VoiceCallWebhookServer replay handling", () => {
     expect(processEvent).toHaveBeenCalledTimes(2);
   });
 
+  it("holds a signed webhook response until event persistence finishes", async () => {
+    const authToken = "signed-delayed-store-token";
+    const twilioProvider = new TwilioProvider({ accountSid: "AC123", authToken });
+    const { manager, processEvent } = createManager([]);
+    const persistence = createDeferred<Awaited<ReturnType<CallManager["processEvent"]>>>();
+    processEvent.mockReturnValueOnce(persistence.promise);
+    const server = createServer(
+      createConfig({ provider: "twilio", twilio: { accountSid: "AC123", authToken } }),
+      manager,
+      twilioProvider,
+    );
+    const baseUrl = await server.start();
+    twilioProvider.setPublicUrl(baseUrl);
+    let answered = false;
+    const response = postSignedTwilioWebhook({
+      baseUrl,
+      authToken,
+      body: "CallSid=CA-delayed-store&CallStatus=in-progress&Direction=outbound-api",
+    }).then((result) => {
+      answered = true;
+      return result;
+    });
+    try {
+      await vi.waitFor(() => expect(processEvent).toHaveBeenCalledOnce());
+      expect(answered).toBe(false);
+      persistence.resolve({ kind: "processed" });
+      expect((await response).status).toBe(200);
+    } finally {
+      persistence.resolve({ kind: "processed" });
+      await response;
+    }
+  });
+
   it("shares failed signed callbacks and successful retries without leaking stream tokens", async () => {
     const authToken = "signed-concurrent-token";
     const twilioProvider = new TwilioProvider(
@@ -1440,5 +1473,67 @@ describe("VoiceCallWebhookServer barge-in suppression during initial message", (
       );
     },
   );
+});
+describe("VoiceCallWebhookServer webhook event auto-response", () => {
+  it("auto-responds to an inbound webhook transcript without conversation mode", async () => {
+    const providerCallId = "v3:webhook-inbound";
+    const call: CallRecord = {
+      ...createCall(Date.now()),
+      providerCallId,
+      provider: "telnyx",
+      direction: "inbound",
+      state: "listening",
+    };
+    const transcript = "Hello from the inbound caller";
+    const { manager, processEvent } = createManager([call]);
+    processEvent.mockResolvedValue({
+      kind: "final-speech",
+      call,
+      transcript,
+      waiterResolved: false,
+    });
+    const telnyxProvider: VoiceCallProvider = {
+      ...provider,
+      name: "telnyx",
+      verifyWebhook: () => ({ ok: true, verifiedRequestKey: "telnyx:req:inbound" }),
+      parseWebhookEvent: () => ({
+        events: [
+          {
+            id: "event-inbound",
+            type: "call.speech",
+            callId: providerCallId,
+            providerCallId,
+            timestamp: Date.now(),
+            transcript,
+            isFinal: true,
+          },
+        ],
+        statusCode: 200,
+      }),
+    };
+    const server = createServer(
+      createConfig({ skipSignatureVerification: true }),
+      manager,
+      telnyxProvider,
+    );
+    const handleInboundResponse = vi.fn(async () => {});
+    (
+      server as unknown as {
+        handleInboundResponse: (callId: string, transcript: string) => Promise<void>;
+      }
+    ).handleInboundResponse = handleInboundResponse;
+
+    const response = await postWebhookForm(await server.start(), "stub=1");
+
+    expect(response.status).toBe(200);
+    expect(processEvent).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        type: "call.speech",
+        transcript,
+        isFinal: true,
+      }),
+    );
+    expect(handleInboundResponse).toHaveBeenCalledExactlyOnceWith(call.callId, transcript);
+  });
 });
 /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */

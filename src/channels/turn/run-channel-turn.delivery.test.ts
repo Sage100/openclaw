@@ -217,48 +217,57 @@ describe("channel turn delivery", () => {
     );
   });
 
-  it("keeps identityless deferred provider completion pending without success observers", async () => {
-    const completion = {
-      deliveryId: "ambiguous-delivery",
-      intentId: "ambiguous-intent",
-      sessionId: "session-1",
-      sessionKey: "agent:main:discord:peer",
-      storePath,
-    };
-    dispatchReplyWithRoutedChannelDispatcherCore.mockImplementationOnce(
-      createDispatch(
-        [],
-        setReplyPayloadMetadata({ text: "reply" }, { pendingFinalDeliveryCompletion: completion }),
-      ),
-    );
-    const onDelivered = vi.fn();
-    const pending = {
-      visibleReplySent: false,
-      suppression: { reason: "adapter_returned_no_identity" as const },
-    };
-    await runRouted(
-      {
-        deliverWithProviderMessageSending: async (_payload, info) => {
-          await info.onPlatformSendDispatch();
-          return { ...pending, finalization: Promise.resolve(pending) };
+  it.each([
+    { deferred: true, visibleReplySent: false },
+    { deferred: false, visibleReplySent: true },
+  ])(
+    "keeps identityless provider completion pending ($deferred, $visibleReplySent)",
+    async ({ deferred, visibleReplySent }) => {
+      const completion = {
+        deliveryId: "ambiguous-delivery",
+        intentId: "ambiguous-intent",
+        sessionId: "session-1",
+        sessionKey: "agent:main:discord:peer",
+        storePath,
+      };
+      dispatchReplyWithRoutedChannelDispatcherCore.mockImplementationOnce(
+        createDispatch(
+          [],
+          setReplyPayloadMetadata(
+            { text: "reply" },
+            { pendingFinalDeliveryCompletion: completion },
+          ),
+        ),
+      );
+      const onDelivered = vi.fn();
+      const pending = {
+        visibleReplySent,
+        suppression: { reason: "adapter_returned_no_identity" as const },
+      };
+      await runRouted(
+        {
+          deliverWithProviderMessageSending: async (_payload, info) => {
+            await info.onPlatformSendDispatch();
+            return deferred ? { ...pending, finalization: Promise.resolve(pending) } : pending;
+          },
+          observeMessageSent: true,
+          onDelivered,
         },
-        observeMessageSent: true,
-        onDelivered,
-      },
-      { OriginatingTo: "channel:123" },
-      { channel: "discord" },
-    );
-    expect(settlePendingFinalDelivery).toHaveBeenLastCalledWith(
-      { kind: "pending-final", ...completion },
-      "unknown",
-    );
-    expect(settlePendingFinalDelivery.mock.calls.map(([, state]) => state)).toEqual([
-      "unknown",
-      "unknown",
-    ]);
-    expect(onDelivered).not.toHaveBeenCalled();
-    expect(emitMessageSent).not.toHaveBeenCalled();
-  });
+        { OriginatingTo: "channel:123" },
+        { channel: "discord" },
+      );
+      expect(settlePendingFinalDelivery).toHaveBeenLastCalledWith(
+        { kind: "pending-final", ...completion },
+        "unknown",
+      );
+      expect(settlePendingFinalDelivery.mock.calls.map(([, state]) => state)).toEqual([
+        "unknown",
+        "unknown",
+      ]);
+      expect(onDelivered).not.toHaveBeenCalled();
+      expect(emitMessageSent).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not let message hooks resurrect payloads suppressed during preparation", async () => {
     const runMessageSending = vi.fn(async () => ({ content: "resurrected" }));
@@ -437,8 +446,24 @@ describe("channel turn delivery", () => {
     );
     expect(deliver).not.toHaveBeenCalled();
     expect(runMessageSending).not.toHaveBeenCalled();
-    const request: DurableSendRequest = { payloads: [{ text: "reply Generated" }] };
-    const support: DurableSupportRequest = { requirements: { text: true } };
+    const request: DurableSendRequest = {
+      channel: "tlon",
+      to: "chat/~nec/general",
+      accountId: "acct",
+      payloads: [{ text: "reply Generated" }],
+      durability: "best_effort",
+      replyToMode: "first",
+      threadId: 777,
+      session: expect.objectContaining({
+        key: "agent:main:test:peer",
+        agentId: "main",
+        requesterAccountId: "acct",
+        requesterSenderId: "sender-1",
+        conversationType: "group",
+        conversationKind: "group",
+      }),
+    };
+    const support: DurableSupportRequest = { channel: "tlon", requirements: { text: true } };
     expect(sendDurableMessageBatch).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining(request),
     );

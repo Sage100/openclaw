@@ -1643,41 +1643,49 @@ describe("executePreparedCliRun supervisor output capture", () => {
     ]);
   });
 
-  it("records explicit message sends for the exact source route", async () => {
-    const context = buildPreparedCliRunContext({ output: "text", provider: "local-cli" });
-    context.mcpDeliveryCapture = true;
-    context.params.sourceReplyDeliveryMode = "message_tool_only";
-    context.params.messageChannel = TEST_MESSAGE_CHANNEL;
-    context.params.agentAccountId = "account-1";
-    context.params.currentChannelId = "chat123";
-    context.params.currentThreadTs = "thread-1";
-    mockCaptureSpawn((input, captureKey) => {
-      recordMcpLoopbackToolCallResult({
-        captureKey,
-        toolName: "message",
-        args: {
-          action: "send",
-          channel: TEST_MESSAGE_CHANNEL,
-          accountId: "account-1",
-          target: "chat123",
-          threadId: "thread-1",
-          message: "explicit reply",
-        },
-        result: {
-          ok: true,
-          details: {
-            deliveryStatus: "sent",
-            sourceReplySink: "internal-ui",
-            sourceReply: { text: "explicit reply" },
+  it.each([
+    ["the exact source route", "account-1", "chat123", "thread-1", true],
+    ["the same target in another account", "account-2", "chat123", "thread-1", false],
+    ["the same target in another thread", "account-1", "chat123", "thread-2", false],
+    ["another target", "account-1", "chat456", "thread-1", false],
+  ] as const)(
+    "records explicit message sends only for %s",
+    async (_label, accountId, target, threadId, expected) => {
+      const context = buildPreparedCliRunContext({ output: "text", provider: "local-cli" });
+      context.mcpDeliveryCapture = true;
+      context.params.sourceReplyDeliveryMode = "message_tool_only";
+      context.params.messageChannel = TEST_MESSAGE_CHANNEL;
+      context.params.agentAccountId = "account-1";
+      context.params.currentChannelId = "chat123";
+      context.params.currentThreadTs = "thread-1";
+      mockCaptureSpawn((input, captureKey) => {
+        recordMcpLoopbackToolCallResult({
+          captureKey,
+          toolName: "message",
+          args: {
+            action: "send",
+            channel: TEST_MESSAGE_CHANNEL,
+            accountId,
+            target,
+            threadId,
+            message: "explicit reply",
           },
-        },
-        isError: false,
+          result: {
+            ok: true,
+            details: {
+              deliveryStatus: "sent",
+              sourceReplySink: "internal-ui",
+              sourceReply: { text: "explicit reply" },
+            },
+          },
+          isError: false,
+        });
+        input.onStdout?.("done");
       });
-      input.onStdout?.("done");
-    });
-    const result = await executePreparedCliRun(context);
-    expect(result.didDeliverSourceReplyViaMessageTool === true).toBe(true);
-  });
+      const result = await executePreparedCliRun(context);
+      expect(result.didDeliverSourceReplyViaMessageTool === true).toBe(expected);
+    },
+  );
 
   it("deactivates a Claude live capture when process startup fails", async () => {
     const context = buildPreparedCliRunContext({ output: "jsonl", provider: "claude-cli" });
