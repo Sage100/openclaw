@@ -11,7 +11,10 @@ import { defaultRuntime } from "../../../runtime.js";
 import { retireSessionMcpRuntimeForSessionKey } from "../../agent-bundle-mcp-tools.js";
 import { removeInternalSessionEffectsSession } from "../../internal-session-effects.js";
 import type { SubagentAnnounceDeliveryResult } from "../announce/subagent-announce-dispatch.js";
-import { blockSubagentCompletionDelivery } from "../completion/subagent-completion-admission.store.js";
+import {
+  blockSubagentCompletionDelivery,
+  quarantineOrphanedSubagentCompletion,
+} from "../completion/subagent-completion-admission.store.js";
 import { revokeRequesterCronAuthorityBatch } from "../requester-cron-authority.js";
 import {
   ensureDeliveryState,
@@ -339,6 +342,9 @@ export function scheduleRequesterSettleWake(
   entry: SubagentRunRecord,
 ): void {
   const params = context.options;
+  if (quarantineOrphanedSubagentCompletion(entry)) {
+    return;
+  }
   const admittedWake = entry.requesterSettleWake;
   const requesterSessionKey = entry.requesterSessionKey?.trim();
   // A replayed lifecycle start can retain an older endedAt; require both
@@ -378,6 +384,9 @@ export function scheduleRequesterSettleWake(
       .runRequesterSettleWake(entry, async () => {
         // Admission may wait behind restored work. Revalidate the durable block
         // after that wait, not only when the wake was initially scheduled.
+        if (quarantineOrphanedSubagentCompletion(entry)) {
+          return false;
+        }
         if (
           isCompletedRequesterDeliveryBlocked(entry) &&
           entry.requesterSettleWake?.requesterYieldBatch !== true
