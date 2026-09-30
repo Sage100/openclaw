@@ -106,6 +106,35 @@ describe("yielded private settle outcomes", () => {
       expected: { delivered: false, disposition: "intentional_non_delivery", terminal: true },
     },
     {
+      name: "public yielded room: plain final suppressed by policy",
+      public: true,
+      response: {
+        status: "ok",
+        result: {
+          payloads: [{ text: "parent answer" }],
+          deliveryStatus: { status: "suppressed", reason: "message_tool_only", resultCount: 0 },
+        },
+      },
+      expected: { delivered: false, disposition: "intentional_non_delivery", terminal: true },
+    },
+    ...[
+      { error: { kind: "incomplete_turn" } },
+      { aborted: true },
+      { yielded: true },
+      { continuationPending: true },
+    ].map((meta) => ({
+      name: "policy suppression cannot settle " + Object.keys(meta)[0],
+      response: {
+        status: "ok",
+        result: {
+          payloads: [{ text: "partial answer" }],
+          meta,
+          deliveryStatus: { status: "suppressed", reason: "message_tool_only", resultCount: 0 },
+        },
+      },
+      expected: { delivered: false, reason: "visible_reply_missing" },
+    })),
+    {
       name: "transferred next wave",
       response: {
         status: "ok",
@@ -150,7 +179,9 @@ describe("yielded private settle outcomes", () => {
       requesterIsSubagent: false,
       expectsCompletionMessage: false,
       requireDirectDelivery: true,
-      completionRequesterSessionId: "requester-session-dm",
+      ...("public" in testCase
+        ? { requireVisibleReply: true }
+        : { completionRequesterSessionId: "requester-session-dm" }),
       directIdempotencyKey: "announce:requester-settle:private",
     });
     expect(result).toMatchObject(testCase.expected);
@@ -162,7 +193,7 @@ describe("yielded private settle outcomes", () => {
         deliver: true,
         channel: "discord",
         to: "dm:U123",
-        expectedExistingSessionId: "requester-session-dm",
+        ...("public" in testCase ? {} : { expectedExistingSessionId: "requester-session-dm" }),
       });
       // The conversation's configured reply policy decides, not this handoff.
       expect(agentParams).not.toHaveProperty("sourceReplyDeliveryMode");

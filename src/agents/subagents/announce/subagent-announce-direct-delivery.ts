@@ -289,9 +289,7 @@ export async function sendSubagentAnnounceDirectly(
       ? "automatic"
       : requiresMessageToolDelivery
         ? "message_tool_only"
-        : params.requireVisibleReply && deliveryTarget.deliver
-          ? "automatic"
-          : undefined;
+        : undefined;
     const shouldDeliverAgentFinal = deliveryTarget.deliver && !requiresMessageToolDelivery;
     const requesterQueueSettings = resolveQueueSettings({
       cfg,

@@ -5290,9 +5290,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     expect(queueEmbeddedAgentMessageWithOutcome).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();
     const agentParams = expectGatewayAgentParams(callGateway, route.agentParams);
-    expect(agentParams.sourceReplyDeliveryMode).toBe(
-      requireVisibleReply && route.agentParams.deliver ? "automatic" : undefined,
-    );
+    expect(agentParams.sourceReplyDeliveryMode).toBeUndefined();
   });
 
   it.each([

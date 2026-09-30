@@ -178,6 +178,15 @@ export function createDirectAnnounceResponseClassifier(context: DirectAnnounceRe
       (automaticEvidence.mayHaveSent ||
         automaticEvidence.suppressionReason !== "no_visible_payload")
     ) {
+      if (
+        automaticEvidence.suppressionReason === "message_tool_only" &&
+        !automaticEvidence.mayHaveSent &&
+        (!requesterCompletedSuccessfully ||
+          directAnnounceResult?.meta?.yielded === true ||
+          directAnnounceResult?.meta?.continuationPending === true)
+      ) {
+        return missingVisibleReplyResult();
+      }
       return {
         delivered: false,
         path: "direct",

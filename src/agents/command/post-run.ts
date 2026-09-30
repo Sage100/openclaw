@@ -374,7 +374,13 @@ export async function finalizeEmbeddedAgentCommand(params: {
       storePath,
       suppressVisibleSessionEffects: params.suppressVisibleSessionEffects,
       sessionReboundDuringRun,
-      payloads,
+      payloads:
+        params.opts.sourceReplyDeliveryMode === "message_tool_only"
+          ? payloads.filter(
+              (payload) =>
+                getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression === true,
+            )
+          : payloads,
       deliveryContext: params.currentRunDeliveryContext,
       runOwnedSessionId,
     });

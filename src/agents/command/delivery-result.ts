@@ -1,4 +1,10 @@
-import type { SerializedDurableMessagePayloadOutcome } from "../../channels/message/runtime.js";
+import type { NormalizeReplySkipReason } from "../../auto-reply/reply/normalize-reply.js";
+import type {
+  sendDurableMessageBatchCore,
+  SerializedDurableMessagePayloadOutcome,
+} from "../../channels/message/runtime.js";
+import { serializeDurableMessagePayloadOutcomes } from "../../channels/message/runtime.js";
+import { formatErrorMessage } from "../../infra/errors.js";
 import type { projectOutboundPayloadPlanForJson } from "../../infra/outbound/payloads.js";
 import { hasAnyNonEmptyString as hasNonEmptyStringArray } from "../delivery-evidence-values.js";
 import type { MessagingToolSend } from "../embedded-agent-messaging.types.js";
@@ -96,5 +102,83 @@ export function buildDeliveryResult(params: {
       ? { deliverySucceeded: params.deliverySucceeded }
       : {}),
     ...(params.deliveryStatus ? { deliveryStatus: params.deliveryStatus } : {}),
+  };
+}
+
+type DurableSendResult = Awaited<ReturnType<typeof sendDurableMessageBatchCore>>;
+
+export function deliveryStatusFromDurableSend(send: DurableSendResult): AgentCommandDeliveryStatus {
+  const payloadOutcomes = serializeDurableMessagePayloadOutcomes(send.payloadOutcomes, {
+    includeHookEffect: true,
+  });
+  switch (send.status) {
+    case "sent":
+      return {
+        requested: true,
+        attempted: true,
+        status: "sent",
+        succeeded: true,
+        resultCount: send.results.length,
+        ...(payloadOutcomes ? { payloadOutcomes } : {}),
+      };
+    case "suppressed":
+      return {
+        requested: true,
+        attempted: true,
+        status: "suppressed",
+        succeeded: true,
+        reason: send.reason,
+        resultCount: 0,
+        ...(payloadOutcomes ? { payloadOutcomes } : {}),
+      };
+    case "partial_failed":
+      return {
+        requested: true,
+        attempted: true,
+        status: "partial_failed",
+        succeeded: "partial",
+        error: true,
+        errorMessage: formatErrorMessage(send.error),
+        resultCount: send.results.length,
+        sentBeforeError: true,
+        ...(payloadOutcomes ? { payloadOutcomes } : {}),
+      };
+    case "failed":
+      return {
+        requested: true,
+        attempted: true,
+        status: "failed",
+        succeeded: false,
+        error: true,
+        errorMessage: formatErrorMessage(send.error),
+        ...(send.stage ? { reason: send.stage } : {}),
+        ...(payloadOutcomes ? { payloadOutcomes } : {}),
+      };
+  }
+  const exhaustive: never = send;
+  return exhaustive;
+}
+
+export function preDeliveryFailureStatus(reason: string): AgentCommandDeliveryStatus {
+  return {
+    requested: true,
+    attempted: false,
+    status: "failed",
+    succeeded: false,
+    error: true,
+    reason,
+  };
+}
+
+export function noVisiblePayloadStatus(
+  reason?: NormalizeReplySkipReason,
+): AgentCommandDeliveryStatus {
+  return {
+    requested: true,
+    attempted: false,
+    status: "suppressed",
+    succeeded: true,
+    reason: reason === "channel_transform" ? reason : "no_visible_payload",
+    resultCount: 0,
   };
 }
