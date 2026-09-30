@@ -56,6 +56,8 @@ const CONTROL_UI_LOCALE_GZIP_BYTES = 300 * KIB;
 // accompany an intentional loading or chunking decision.
 const controlUiPerformanceBudgets = {
   startupJsRequests: 18,
+  // Chat and New Session each measured 29 boot JS requests; allow 3 requests of headroom.
+  routeBootJsRequests: 32,
   startupCssRequests: 1,
   // Approved measured upload-control baseline; retain the fixed growth and variance allowances.
   startupJsGzipBytes: 371_771,
@@ -309,6 +311,16 @@ export function evaluateControlUiPerformanceBudgets(
       "count",
     ],
   ];
+  if (metrics.routeBoot) {
+    for (const route of ["chat", "new"] as const) {
+      checks.push([
+        `${route} boot JS requests`,
+        metrics.routeBoot[route].js.requests,
+        budgets.routeBootJsRequests,
+        "count",
+      ]);
+    }
+  }
   const violations = checks.flatMap(([metric, actual, limit, unit]) =>
     actual > limit ? [{ metric, actual, limit, unit }] : [],
   );
@@ -447,7 +459,7 @@ export function formatControlUiPerformanceReport(
     for (const route of ["chat", "new"] as const) {
       const boot = metrics.routeBoot[route];
       lines.push(
-        `  ${route} boot JS: ${formatAssetSummary(boot.js)} (${boot.js.gzipBytes - metrics.startup.js.gzipBytes} B beyond initial-entry JS)`,
+        `  ${route} boot JS: ${formatAssetSummary(boot.js)} (${boot.js.gzipBytes - metrics.startup.js.gzipBytes} B beyond initial-entry JS; limit: ${formatRequestCount(budgets.routeBootJsRequests)})`,
         `  ${route} boot CSS: ${formatAssetSummary(boot.css)}`,
       );
       if (baseMetrics) {
