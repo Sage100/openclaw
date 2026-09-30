@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { PLUGIN_CAPABILITY_CONSENT_REQUIRED } from "../../packages/gateway-protocol/src/capability-consent-error-details.js";
 import { UPDATE_RUN_PHASES } from "../../packages/gateway-protocol/src/update-run-vocabulary.js";
-import { GATEWAY_RESTART_WAIT_OUTCOMES } from "../cli/daemon-cli/restart-health.types.js";
+import { GATEWAY_RESTART_WAIT_OUTCOMES } from "../cli/daemon-cli/restart-health.constants.js";
 import { isServiceInspectionReason } from "../daemon/service-inspection-error.js";
 import { normalizeSupportDiagnosticErrorCode } from "../logging/diagnostic-support-redaction.js";
 import { CLAWHUB_INSTALL_ERROR_CODE } from "../plugins/clawhub-error-codes.js";
