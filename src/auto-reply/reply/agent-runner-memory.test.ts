@@ -3,7 +3,17 @@ import fsCore from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
 import { makeUserMessage } from "../../../test/helpers/user-message.js";
 import {
@@ -304,6 +314,8 @@ async function commitSourceCompaction(params: { sessionKey: string; storePath: s
 }
 
 describe("runMemoryFlushIfNeeded", () => {
+  let suiteRoot = "";
+  let caseCount = 0;
   let rootDir = "";
 
   async function runDefaultMemoryFlush(
@@ -429,8 +441,22 @@ describe("runMemoryFlushIfNeeded", () => {
     return { run, sessionEntry, storePath };
   }
 
+  beforeAll(async () => {
+    // openclaw-temp-dir: allow removal must await the agent database drain below
+    suiteRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-memory-unit-"));
+  });
+
+  afterAll(async () => {
+    // Session writes leave deferred maintenance and history Workers on each case's agent
+    // database; an open during removal recreates files and fails rmdir with ENOTEMPTY.
+    // One suite-level drain avoids paying Worker shutdown in every case.
+    await closeOpenClawAgentDatabasesAsync(suiteRoot);
+    await fs.rm(suiteRoot, { recursive: true, force: true });
+  });
+
   beforeEach(async () => {
-    rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-memory-unit-"));
+    rootDir = path.join(suiteRoot, `case-${++caseCount}`);
+    await fs.mkdir(rootDir);
     registerMemoryFlushPlanResolverForTest(createMemoryFlushPlan);
     runWithModelFallbackMock.mockReset().mockImplementation(async ({ provider, model, run }) => ({
       result: await run(provider, model, {
@@ -479,10 +505,6 @@ describe("runMemoryFlushIfNeeded", () => {
     cliBackendsTesting.resetDepsForTest();
     setActivePluginRegistry(createEmptyPluginRegistry());
     clearMemoryPluginState();
-    // Session writes leave deferred maintenance and history Workers on rootDir's agent
-    // database; an open during removal recreates files and fails rmdir with ENOTEMPTY.
-    await closeOpenClawAgentDatabasesAsync(rootDir);
-    await fs.rm(rootDir, { recursive: true, force: true });
   });
 
   it.each([
