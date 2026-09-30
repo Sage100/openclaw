@@ -2,7 +2,6 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import path, { matchesGlob } from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveTestGitCommits } from "../.github/actions/git-owner/test-prerequisites.mjs";
-import { isTrueOrOne } from "./lib/arg-utils.runtime.mjs";
 import { resolveReleaseContextIdentity } from "./lib/release-context.mjs";
 import { classifyReleaseTrain, parseReleaseVersion } from "./lib/release-version.mjs";
 
@@ -69,12 +68,12 @@ if (!sourceChannelTestEnv) {
   };
 }
 
-const importTargetPlan = async (modulePath) => {
-  if (existsSync(modulePath)) {
-    return import(fromTarget(modulePath));
+const importTargetPlan = async (targetPath) => {
+  if (existsSync(targetPath)) {
+    return import(fromTarget(targetPath));
   }
   if (!compatibilityTarget) {
-    throw new Error(`Current CI target does not provide ${modulePath}`);
+    throw new Error(`Current CI target does not provide ${targetPath}`);
   }
   return {};
 };
@@ -98,6 +97,21 @@ const createChannelContractTestShards =
   typeof channelContractPlan.createChannelContractTestShards === "function"
     ? channelContractPlan.createChannelContractTestShards
     : () => [];
+
+// The harness runs this file without workspace packages, so it keeps its own env-flag grammar.
+const parseCiEnvFlag = (value, fallback = false) => {
+  if (value === undefined) {
+    return fallback;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "0" || normalized === "") {
+    return false;
+  }
+  return fallback;
+};
 
 const pluginContractPlan = await importTargetPlan(
   existsSync("./scripts/lib/plugin-contract-test-plan.mts")
@@ -139,16 +153,14 @@ const changedPaths = (() => {
         ? readFileSync(manifestPath, "utf8")
         : (process.env.OPENCLAW_CI_CHANGED_PATHS_JSON ?? "null"),
     );
-    return Array.isArray(value) && value.every((changedPath) => typeof changedPath === "string")
-      ? value
-      : null;
+    return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : null;
   } catch {
     return null;
   }
 })();
-const docsOnly = isTrueOrOne(process.env.OPENCLAW_CI_DOCS_ONLY);
-const docsChanged = isTrueOrOne(process.env.OPENCLAW_CI_DOCS_CHANGED);
-const releaseGate = isTrueOrOne(process.env.OPENCLAW_CI_RELEASE_GATE) && !ciQualification;
+const docsOnly = parseCiEnvFlag(process.env.OPENCLAW_CI_DOCS_ONLY);
+const docsChanged = parseCiEnvFlag(process.env.OPENCLAW_CI_DOCS_CHANGED);
+const releaseGate = parseCiEnvFlag(process.env.OPENCLAW_CI_RELEASE_GATE) && !ciQualification;
 const compactPullRequest = isCanonicalRepository && eventName === "pull_request";
 const runtimePullRequest = isCanonicalRepository && (compactPullRequest || releaseGate);
 // Exact-head release gates substitute for PR CI. Ordinary manual CI
@@ -234,11 +246,11 @@ const toolingOwnerChange =
   typeof nodeTestPlan.isToolingTestOwnerPath === "function" &&
   changedPaths.some(nodeTestPlan.isToolingTestOwnerPath);
 const nodeDataOnly =
-  eventName === "pull_request" && isTrueOrOne(process.env.OPENCLAW_CI_NODE_TEST_DATA_ONLY);
+  eventName === "pull_request" && parseCiEnvFlag(process.env.OPENCLAW_CI_NODE_TEST_DATA_ONLY);
 const nativeGeneratedOnly =
   workflowEventName === "pull_request" &&
   isCanonicalRepository &&
-  !isTrueOrOne(process.env.OPENCLAW_CI_FULL) &&
+  !parseCiEnvFlag(process.env.OPENCLAW_CI_FULL) &&
   process.env.OPENCLAW_CI_HEAD_REPOSITORY === process.env.OPENCLAW_CI_REPOSITORY &&
   process.env.OPENCLAW_CI_PR_AUTHOR_TYPE === "Bot" &&
   (
@@ -247,16 +259,16 @@ const nativeGeneratedOnly =
 const runNode =
   !nodeDataOnly &&
   !nativeGeneratedOnly &&
-  ((isTrueOrOne(process.env.OPENCLAW_CI_RUN_NODE) && !docsOnly) || toolingOwnerChange);
+  ((parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_NODE) && !docsOnly) || toolingOwnerChange);
 const runNodeFastOnly =
   runNode &&
   !runtimePullRequest &&
   !toolingOwnerChange &&
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_NODE_FAST_ONLY);
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_NODE_FAST_ONLY);
 const runNodeFull = runNode && !runNodeFastOnly;
 // release-fast-lane: label-admitted narrow gate for release tooling PRs.
 // Canonical PR CI only; declined runs keep every ordinary decision.
-const releaseFastLaneLabel = isTrueOrOne(process.env.OPENCLAW_CI_RELEASE_FAST_LANE_LABEL);
+const releaseFastLaneLabel = parseCiEnvFlag(process.env.OPENCLAW_CI_RELEASE_FAST_LANE_LABEL);
 const releaseFastLaneScope = !releaseFastLaneLabel
   ? null
   : !(
@@ -311,9 +323,9 @@ if (
 }
 
 const runNodeFastPluginContracts =
-  runNode && isTrueOrOne(process.env.OPENCLAW_CI_RUN_NODE_FAST_PLUGIN_CONTRACTS);
+  runNode && parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_NODE_FAST_PLUGIN_CONTRACTS);
 const runNodeFastCiRouting =
-  runNode && isTrueOrOne(process.env.OPENCLAW_CI_RUN_NODE_FAST_CI_ROUTING);
+  runNode && parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_NODE_FAST_CI_ROUTING);
 const proposedCheckScope =
   runtimePullRequest &&
   (!frozenTarget || releaseGate) &&
@@ -332,7 +344,7 @@ const channelContractShards =
   !runtimePullRequest && runNodeFull && !releaseFastLane ? createChannelContractTestShards() : [];
 const runMacos =
   !nativeGeneratedOnly &&
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_MACOS) &&
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_MACOS) &&
   !docsOnly &&
   isCanonicalRepository &&
   !releaseFastLane;
@@ -340,7 +352,7 @@ const runMacos =
 const runMacosNode =
   runMacos ||
   (!nativeGeneratedOnly &&
-    isTrueOrOne(process.env.OPENCLAW_CI_RUN_MACOS_NODE) &&
+    parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_MACOS_NODE) &&
     !docsOnly &&
     isCanonicalRepository &&
     !releaseFastLane);
@@ -352,7 +364,7 @@ const supportsIosBuild = hasPackageScript("ios:build");
 const supportsCurrentIosCi = supportsIosBuild && supportsCurrentMacosSwiftCi;
 const runIosBuild =
   !nativeGeneratedOnly &&
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_IOS_BUILD) &&
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_IOS_BUILD) &&
   !releaseFastLane &&
   !npmQualification &&
   !docsOnly &&
@@ -360,7 +372,7 @@ const runIosBuild =
   (!frozenTarget || supportsCurrentIosCi || (releaseCandidateTarget && supportsIosBuild));
 const runAndroid =
   !nativeGeneratedOnly &&
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_ANDROID) &&
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_ANDROID) &&
   !npmQualification &&
   !docsOnly &&
   isCanonicalRepository &&
@@ -375,17 +387,17 @@ const runAndroidAccessNative =
       "apps/android/app/src/androidTest/java/ai/openclaw/app/gateway/CloudflareAccessNativeTest.kt",
     ));
 let runWindows =
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_WINDOWS) &&
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_WINDOWS) &&
   !releaseFastLane &&
   !docsOnly &&
   !runNodeFastOnly &&
   isCanonicalRepository;
 const runSkillsPython =
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_SKILLS_PYTHON) && !docsOnly && !releaseFastLane;
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_SKILLS_PYTHON) && !docsOnly && !releaseFastLane;
 const runControlUiI18n =
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_CONTROL_UI_I18N) && !docsOnly && !releaseFastLane;
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_CONTROL_UI_I18N) && !docsOnly && !releaseFastLane;
 let runUiTests =
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_UI_TESTS) &&
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_UI_TESTS) &&
   !docsOnly &&
   !nodeDataOnly &&
   !releaseFastLane;
@@ -442,7 +454,7 @@ const supportsNativeI18n =
   hasPackageScript("android:i18n:check") &&
   hasPackageScript("apple:i18n:check");
 const runNativeI18n =
-  isTrueOrOne(process.env.OPENCLAW_CI_RUN_NATIVE_I18N) &&
+  parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_NATIVE_I18N) &&
   !releaseFastLane &&
   !npmQualification &&
   !docsOnly &&
@@ -608,7 +620,7 @@ const plannedWindowsShards =
     : null;
 const windowsShards =
   plannedWindowsShards
-    ?.map((shard) => Object.assign({}, shard, { runtime: "node", task: "test" }))
+    ?.map((shard) => Object.assign(shard, { runtime: "node", task: "test" }))
     .filter((shard) => shard.targets.length > 0) ??
   (runWindows
     ? [1, 2].map((part) => ({
@@ -666,6 +678,7 @@ const compactPlanMode = !isCanonicalRepository
       : undefined;
 const nodeMatrixLimit = mainValidation ? 77 : compactPlanMode === "pull-request" ? 130 : 70;
 let changedNodeTestShards = null;
+/** @type {string | undefined} */
 let changedNodeTestFallbackReason;
 if (runtimePullRequest && runNodeFull) {
   // PRs admit only concrete owner plans; missing selection is a planner failure.
@@ -1505,8 +1518,8 @@ if (hybridHostedEligible) {
     "macos-node": count(manifest.run_macos_node, manifest.macos_node_matrix.include.length),
     "macos-swift": count(manifest.run_macos_swift, 2),
     "ios-build": count(manifest.run_ios_build),
-    "ios-screenshot-shard": count(isTrueOrOne(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS), 2),
-    "ios-screenshot-evidence": count(isTrueOrOne(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS)),
+    "ios-screenshot-shard": count(parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS), 2),
+    "ios-screenshot-evidence": count(parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS)),
     "android-access-native": count(manifest.run_android_access_native, 2),
     "docker-seed-e2e": count(
       manifest.run_docker_seed_e2e &&
@@ -1651,7 +1664,7 @@ manifest.pr_job_count =
       countPrJobs(manifest.run_ios_build) +
       (manifest.run_ui_real_gateway ? uiRealGatewayShards.length : 0) +
       countPrJobs(manifest.run_android_access_native, 2) +
-      countPrJobs(isTrueOrOne(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS), 3);
+      countPrJobs(parseCiEnvFlag(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS), 3);
 
 for (const [key, value] of Object.entries(manifest)) {
   appendFileSync(
@@ -1674,7 +1687,7 @@ if (releaseFastLane) {
         `- Running: ${running}.\n` +
         "- Skipped: contracts, baseline ratchets, bundled protocol, Bun launcher, additional checks, Control UI, Windows, macOS, iOS, Android, native and Control UI i18n, skills-python.\n" +
         (changedNodeTestFallbackReason
-          ? `- Node plan: bounded owner selection (${String(changedNodeTestFallbackReason)}).\n`
+          ? `- Node plan: bounded owner selection (${changedNodeTestFallbackReason}).\n`
           : "") +
         "\n",
     );

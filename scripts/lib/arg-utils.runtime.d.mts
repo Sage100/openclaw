@@ -47,7 +47,6 @@ export function classifyBoundedUnsignedDecimal(
 export function parsePermissiveBooleanToken(value: unknown): boolean | undefined;
 export function isOpenEndedTruthyValue(value: string | undefined): boolean;
 export function isStrictAffirmativeValue(value: string | undefined): boolean;
-export function isTrueOrOne(value: string | undefined): boolean;
 export function stringFlag<T extends Record<string, unknown>>(
   flag: string,
   key: string,

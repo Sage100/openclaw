@@ -249,15 +249,6 @@ export function isOpenEndedTruthyValue(value) {
 
 const STRICT_AFFIRMATIVE_TOKENS = new Set(["1", "true", "yes"]);
 /**
- * Accept the closed true/1 language used by dependency-free CI flags.
- * @param {string | undefined} value
- */
-export function isTrueOrOne(value) {
-  const normalized = value?.trim().toLowerCase();
-  return normalized === "true" || normalized === "1";
-}
-
-/**
  * Accept only the narrow affirmative token language used by script environment flags.
  * @param {string | undefined} value
  */
