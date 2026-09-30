@@ -234,22 +234,87 @@ function retiredCancellationEndedAt(subagent: SubagentRunRecord, now: number): n
   return endedAt;
 }
 
-function ownsRetiredCancellation(
+function ownsOrphanedSubagentSnapshot(
   database: OpenClawStateDatabase,
   subagent: SubagentRunRecord,
   expected: SubagentRunRecord,
+  allowCompletedCliSidecar = false,
 ): boolean {
+  const task = findTaskRecordByRunIdForViewInDatabase(
+    database.db,
+    subagent.taskRunId ?? subagent.runId,
+  );
+  const retiredCliSidecar =
+    allowCompletedCliSidecar &&
+    task?.runtime === "cli" &&
+    task.status === "succeeded" &&
+    task.deliveryStatus === "not_applicable" &&
+    task.notifyPolicy === "silent" &&
+    !task.taskKind &&
+    Number.isFinite(task.endedAt) &&
+    task.requesterSessionKey === subagent.childSessionKey &&
+    task.childSessionKey === subagent.childSessionKey;
   const newerSibling = (candidate: SubagentRunRecord) =>
     candidate.childSessionKey === subagent.childSessionKey &&
     compareSubagentRunGeneration(candidate, subagent) > 0;
   return (
     subagentRuns.get(subagent.runId) === expected &&
     bindSubagentRunRecord(subagent).payload_json === bindSubagentRunRecord(expected).payload_json &&
-    !findTaskRecordByRunIdForViewInDatabase(database.db, subagent.taskRunId ?? subagent.runId) &&
+    (!task || retiredCliSidecar) &&
     ![...subagentRuns.values()].some(newerSibling) &&
     !loadSubagentRunsForChildSessionFromSqlite(subagent.childSessionKey, database).some(
       newerSibling,
     )
+  );
+}
+
+/** Quarantine taskless historical success without inventing a task owner or delivery receipt. */
+export function quarantineOrphanedSubagentCompletion(
+  expected: SubagentRunRecord,
+  databaseOptions?: OpenClawStateDatabaseOptions,
+): boolean {
+  if (
+    expected.delivery?.lastDropReason === "orphaned_completion_task_owner" &&
+    expected.delivery.status === "suspended"
+  ) {
+    return true;
+  }
+  if (
+    expected.expectsCompletionMessage !== true ||
+    !expected.requesterSettleWake ||
+    expected.execution.status !== "terminal" ||
+    expected.execution.outcome?.status !== "ok" ||
+    !Number.isFinite(expected.execution.endedAt) ||
+    expected.pauseReason ||
+    expected.killIntent ||
+    expected.execution.restartRecovery ||
+    expected.delivery?.queueId ||
+    !["pending", "in_progress"].includes(expected.delivery?.status ?? "pending")
+  ) {
+    return false;
+  }
+  return runOpenClawStateWriteTransaction(
+    (database) => {
+      const subagent = readSubagentRun(database, expected.runId);
+      if (!subagent || !ownsOrphanedSubagentSnapshot(database, subagent, expected, true)) {
+        return false;
+      }
+      const delivery = ensureDeliveryState(subagent);
+      delivery.status = "suspended";
+      delivery.suspendedAt = Date.now();
+      delivery.suspendedReason = "permanent_failure";
+      delivery.lastDropReason = "orphaned_completion_task_owner";
+      delivery.lastError =
+        "Completion delivery quarantined: canonical task owner is absent; result and attachments retained.";
+      subagent.requesterSettleWake = undefined;
+      upsertSubagentRunRowInDatabase(database, bindSubagentRunRecord(subagent));
+      deferSqlitePostCommitPublication(database.db, () => {
+        publishCommittedSubagent(subagent).forEach((emit) => emit());
+      });
+      return true;
+    },
+    databaseOptions,
+    { operationLabel: "orphaned subagent completion quarantine" },
   );
 }
 
@@ -277,7 +342,7 @@ export function reconcileRetiredSubagentCancellation(
     if (findTaskRecordByRunIdForViewInDatabase(database.db, subagent.taskRunId ?? subagent.runId)) {
       return undefined;
     }
-    if (!ownsRetiredCancellation(database, subagent, expected)) {
+    if (!ownsOrphanedSubagentSnapshot(database, subagent, expected)) {
       return false;
     }
     subagent.killReconciliation = undefined;
@@ -310,7 +375,7 @@ export function blockSubagentCompletionDelivery(params: {
       if (
         endedAt === undefined ||
         subagent.killReconciliation ||
-        !ownsRetiredCancellation(database, subagent, params.subagent)
+        !ownsOrphanedSubagentSnapshot(database, subagent, params.subagent)
       ) {
         return false;
       }

@@ -30,13 +30,17 @@ import { suspendPendingFinalDelivery } from "../registry/subagent-registry-lifec
 import { SubagentLifecycleController } from "../registry/subagent-registry-lifecycle.js";
 import { subagentRuns } from "../registry/subagent-registry-memory.js";
 import { onSubagentRegistryPersisted } from "../registry/subagent-registry-state.js";
-import { loadSubagentRegistryFromSqlite } from "../registry/subagent-registry.store.sqlite.js";
+import {
+  saveSubagentRegistryToSqlite,
+  loadSubagentRegistryFromSqlite,
+} from "../registry/subagent-registry.store.sqlite.js";
 import type { SubagentRunRecord } from "../registry/subagent-registry.types.js";
 import { resolveSubagentAttachmentDir } from "../subagent-attachment-paths.js";
 import {
   admitSubagentCompletionDelivery,
   blockSubagentCompletionDelivery,
   settleSubagentCompletionDelivery,
+  quarantineOrphanedSubagentCompletion,
 } from "./subagent-completion-admission.store.js";
 import {
   armRequesterWake,
@@ -80,6 +84,81 @@ describe("atomic subagent completion admission store", () => {
     resetTaskRegistryForTests({ persist: false });
     closeOpenClawStateDatabaseForTest();
     vi.unstubAllEnvs();
+  });
+
+  it("quarantines taskless terminal success before requester wake and retains evidence", async () => {
+    await useDefaultDatabase();
+    const input = records();
+    input.subagent.delivery!.queueId = undefined;
+    armRequesterWake(input);
+    subagentRuns.set(input.subagent.runId, input.subagent);
+    const attachmentsDir = resolveSubagentAttachmentDir(
+      "main",
+      input.subagent.childSessionKey,
+      "orphan-attachment",
+    );
+    input.subagent.attachmentId = "orphan-attachment";
+    saveSubagentRegistryToSqlite(subagentRuns);
+    await fs.mkdir(attachmentsDir, { recursive: true });
+    expect(rowCount("task_runs")).toBe(0);
+    const marker = path.join(attachmentsDir, "original-attachment.pdf");
+    await fs.writeFile(marker, "original-pdf-evidence");
+    const driver = requesterWakeDriver([input]);
+    driver.controller.resumeRequesterSettleWake(input.subagent.runId, input.subagent);
+    driver.controller.resumeRequesterSettleWake(input.subagent.runId, input.subagent);
+    expect(driver.wake).not.toHaveBeenCalled();
+    expect(input.subagent.delivery).toMatchObject({
+      status: "suspended",
+      suspendedReason: "permanent_failure",
+      lastDropReason: "orphaned_completion_task_owner",
+    });
+    expect(input.subagent.requesterSettleWake).toBeUndefined();
+    expect(input.subagent.completion?.resultText).toBe("canonical result");
+    expect(await fs.readFile(marker, "utf8")).toBe("original-pdf-evidence");
+    expect(rowCount("task_runs")).toBe(0);
+    expect(rowCount("subagent_runs")).toBe(1);
+    const restored = loadSubagentRegistryFromSqlite().get(input.subagent.runId);
+    expect(restored?.delivery?.status).toBe("suspended");
+    expect(restored?.completion?.resultText).toBe("canonical result");
+  });
+
+  it("quarantines a completed child-owned CLI sidecar and preserves the CLI task", async () => {
+    const input = records();
+    armRequesterWake(input);
+    input.subagent.delivery!.queueId = undefined;
+    input.task.runtime = "cli";
+    input.task.requesterSessionKey = input.subagent.childSessionKey;
+    input.task.ownerKey = input.subagent.childSessionKey;
+    input.task.deliveryStatus = "not_applicable";
+    input.task.notifyPolicy = "silent";
+    persistOwner(input);
+    const before = database.db
+      .prepare("SELECT * FROM task_runs WHERE task_id = ?")
+      .get(input.task.taskId);
+    expect(quarantineOrphanedSubagentCompletion(input.subagent, { database })).toBe(true);
+    expect(input.subagent.delivery?.status).toBe("suspended");
+    expect(
+      database.db.prepare("SELECT * FROM task_runs WHERE task_id = ?").get(input.task.taskId),
+    ).toEqual(before);
+  });
+
+  it("does not quarantine a canonical task owner or a queued send", async () => {
+    const input = persistOwner();
+    armRequesterWake(input);
+    input.subagent.delivery!.queueId = undefined;
+    settleSubagentCompletionDelivery({ ...input, databaseOptions: { database } });
+    expect(quarantineOrphanedSubagentCompletion(input.subagent, { database })).toBe(false);
+    expect(input.subagent.delivery?.status).toBe("in_progress");
+    const orphan = records();
+    armRequesterWake(orphan);
+    orphan.subagent.runId = "queued-orphan";
+    orphan.subagent.taskRunId = "absent-owner";
+    subagentRuns.set(orphan.subagent.runId, orphan.subagent);
+    expect(quarantineOrphanedSubagentCompletion(orphan.subagent, { database })).toBe(false);
+    expect(orphan.subagent.delivery?.queueId).toBeDefined();
+    orphan.subagent.delivery!.queueId = undefined;
+    orphan.subagent.execution.status = "running";
+    expect(quarantineOrphanedSubagentCompletion(orphan.subagent, { database })).toBe(false);
   });
 
   function rowCount(table: "delivery_queue_entries" | "subagent_runs" | "task_runs"): number {
