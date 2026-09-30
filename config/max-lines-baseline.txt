@@ -16,7 +16,6 @@ extensions/browser/src/browser/chrome.ts
 extensions/browser/src/browser/extension-relay/relay-bridge.ts
 extensions/browser/src/browser/routes/agent.snapshot.ts
 extensions/codex/doctor-contract-api.test.ts
-extensions/codex/src/app-server/approval-bridge.test.ts
 extensions/codex/src/app-server/approval-bridge.ts
 extensions/codex/src/app-server/auth-bridge.test.ts
 extensions/codex/src/app-server/auth-bridge.ts
@@ -356,7 +355,6 @@ src/auto-reply/reply/queue.collect.test.ts
 src/auto-reply/reply/queue/drain.ts
 src/auto-reply/reply/reply-run-registry.test.ts
 src/auto-reply/reply/reply-turn-admission.test.ts
-src/auto-reply/reply/reply-utils.test.ts
 src/auto-reply/reply/session.test.ts
 src/auto-reply/reply/session.ts
 src/auto-reply/status.test.ts
@@ -431,7 +429,6 @@ src/config/io.write-config.test.ts
 src/config/io.write-prepare.ts
 src/config/mutate.test.ts
 src/config/mutate.ts
-src/config/redact-snapshot.test.ts
 src/config/schema.labels.ts
 src/config/schema.test.ts
 src/config/sessions/session-accessor.conformance.test.ts
@@ -540,7 +537,6 @@ src/infra/exec-approvals-allowlist.ts
 src/infra/exec-authorization-plan.ts
 src/infra/host-env-security.test.ts
 src/infra/infra-runtime.test.ts
-src/infra/net/fetch-guard.ssrf.test.ts
 src/infra/npm-managed-root.test.ts
 src/infra/npm-managed-root.ts
 src/infra/outbound/deliver.test.ts
@@ -616,7 +612,6 @@ src/plugins/official-external-plugin-catalog.test.ts
 src/plugins/plugin-registry-snapshot.test.ts
 src/plugins/provider-runtime.test.ts
 src/plugins/provider-runtime.ts
-src/plugins/providers.test.ts
 src/plugins/providers.ts
 src/plugins/schema-validator.test.ts
 src/plugins/sdk-alias.test.ts
