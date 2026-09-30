@@ -8,6 +8,7 @@ import {
   createWorkboardSqliteTestHarness,
   createWorkboardSqliteTestStore,
 } from "./test/sqlite-store.js";
+import { createWorkboardSessionsBoardTools } from "./tools-sessions-board.js";
 import { createWorkboardTools } from "./tools.js";
 import { guardWorkboardToolsForWorkspaceAccess } from "./workspace-access.js";
 
@@ -22,7 +23,10 @@ describe("workboard tools", () => {
     const sessionsBoard = await startEmptySessionsBoardService(store);
     try {
       const tools = new Map(
-        createWorkboardTools({ store, sessionsBoard }).map((tool) => [tool.name, tool]),
+        [
+          ...createWorkboardTools({ store }),
+          ...createWorkboardSessionsBoardTools({ store, sessionsBoard }),
+        ].map((tool) => [tool.name, tool]),
       );
       const read = expectDefined(tools.get("workboard_sessions_board_read"), "Sessions board read");
       const update = expectDefined(

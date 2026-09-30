@@ -82,8 +82,8 @@ export function sessionsBoardFallback(board: WorkboardSessionsBoard): WorkboardS
 /** Utility models often fence their JSON despite strict-output instructions. */
 function unfenceJson(text: string): string {
   const trimmed = text.trim();
-  const fenced = /^```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)\n?```$/.exec(trimmed);
-  return fenced ? fenced[1].trim() : trimmed;
+  const body = /^```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)\n?```$/.exec(trimmed)?.[1];
+  return body === undefined ? trimmed : body.trim();
 }
 
 export function parseSessionPlacements(

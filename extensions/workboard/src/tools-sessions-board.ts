@@ -94,7 +94,7 @@ export function createWorkboardSessionsBoardTools(params: {
         : "boardId is required when more than one Sessions board exists. Use workboard_boards to choose one.",
     );
   };
-  return [
+  const tools: AnyAgentTool[] = [
     {
       name: "workboard_sessions_board_read",
       label: "Sessions Board Read",
@@ -152,4 +152,9 @@ export function createWorkboardSessionsBoardTools(params: {
       },
     },
   ];
+  for (const tool of tools) {
+    const execute = tool.execute;
+    tool.execute = (...args) => params.store.runOperation(() => execute(...args));
+  }
+  return tools;
 }

@@ -25,7 +25,14 @@ type ResolveSandboxWorkspaceAuthority =
 type PrepareSandboxWorkspaceAuthority =
   OpenClawPluginApi["runtime"]["sandbox"]["prepareWorkspaceAuthority"];
 
-export const WORKBOARD_TOOL_NAMES = [
+export const WORKBOARD_SESSIONS_BOARD_TOOL_NAMES = [
+  "workboard_sessions_board_read",
+  "workboard_sessions_board_update",
+  "workboard_sessions_board_move",
+] as const;
+
+/** Card tools stay optional; sessions-board tools register separately as default-on. */
+export const WORKBOARD_CARD_TOOL_NAMES = [
   "workboard_list",
   "workboard_create",
   "workboard_link",
@@ -41,9 +48,6 @@ export const WORKBOARD_TOOL_NAMES = [
   "workboard_board_create",
   "workboard_board_archive",
   "workboard_board_delete",
-  "workboard_sessions_board_read",
-  "workboard_sessions_board_update",
-  "workboard_sessions_board_move",
   "workboard_stats",
   "workboard_runs",
   "workboard_specify",
@@ -64,6 +68,11 @@ export const WORKBOARD_TOOL_NAMES = [
   "workboard_protocol_violation",
   "workboard_unblock",
   "workboard_move",
+] as const;
+
+export const WORKBOARD_TOOL_NAMES = [
+  ...WORKBOARD_CARD_TOOL_NAMES,
+  ...WORKBOARD_SESSIONS_BOARD_TOOL_NAMES,
 ] as const;
 
 export const WORKBOARD_REQUIRED_WORKER_TOOLS = [

@@ -14,10 +14,12 @@ import { createWorkboardSessionsBoardService } from "./src/sessions-board.js";
 import { resolveWorkboardSqliteWorkerModuleUrl } from "./src/sqlite-store-paths.js";
 import { registerWorkboardStoreLifecycle } from "./src/store-lifecycle.js";
 import { WorkboardStore } from "./src/store.js";
+import { createWorkboardSessionsBoardTools } from "./src/tools-sessions-board.js";
 import { createWorkboardTools } from "./src/tools.js";
 import {
   guardWorkboardToolsForWorkspaceAccess,
-  WORKBOARD_TOOL_NAMES,
+  WORKBOARD_CARD_TOOL_NAMES,
+  WORKBOARD_SESSIONS_BOARD_TOOL_NAMES,
 } from "./src/workspace-access.js";
 
 export default definePluginEntry({
@@ -134,14 +136,18 @@ export default definePluginEntry({
     api.registerTool(
       (context) =>
         guardWorkboardToolsForWorkspaceAccess(
-          createWorkboardTools({ context, store, sessionsBoard }),
+          createWorkboardTools({ context, store }),
           context,
           api.runtime.sandbox.resolveWorkspaceAuthority,
         ),
       {
-        names: [...WORKBOARD_TOOL_NAMES],
+        names: [...WORKBOARD_CARD_TOOL_NAMES],
         optional: true,
       },
     );
+    // The docked Board agent needs these without a tools.allow entry.
+    api.registerTool(() => createWorkboardSessionsBoardTools({ store, sessionsBoard }), {
+      names: [...WORKBOARD_SESSIONS_BOARD_TOOL_NAMES],
+    });
   },
 });
