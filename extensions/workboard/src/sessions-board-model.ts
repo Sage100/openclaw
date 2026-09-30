@@ -1,5 +1,5 @@
 import type { WorkboardSessionFacts, WorkboardSessionsBoard } from "@openclaw/workboard-contract";
-import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { redactToolPayloadText } from "openclaw/plugin-sdk/logging-core";
 import {
   completeWithPreparedSimpleCompletionModel,

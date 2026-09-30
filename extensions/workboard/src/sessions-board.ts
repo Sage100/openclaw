@@ -6,7 +6,7 @@ import type {
   WorkboardSessionsBoardRead,
 } from "@openclaw/workboard-contract";
 import { resolveDefaultAgentId } from "openclaw/plugin-sdk/agent-scope-runtime";
-import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { resolveGlobalSingleton } from "openclaw/plugin-sdk/global-singleton";
 import { redactToolPayloadText } from "openclaw/plugin-sdk/logging-core";
 import { isRecord } from "openclaw/plugin-sdk/string-coerce-runtime";
