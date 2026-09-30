@@ -295,6 +295,23 @@ describe("Sessions board classification service", () => {
     );
   });
 
+  it("accepts utility-model JSON wrapped in a markdown code fence", async () => {
+    await withService(
+      {
+        facts: [facts("one")],
+        complete: async ({ sessions }) => "```json\n" + placements(sessions) + "\n```",
+      },
+      async ({ service, store, logger }) => {
+        await service.sweep();
+        expect((await store.listSessionPlacements(BOARD_ID))[0]).toMatchObject({
+          columnId: "focus",
+          source: "model",
+        });
+        expect(logger.warn).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   it("uses fallback for unknown or missing model column IDs and omitted sessions", async () => {
     const sessions = [
       facts("valid"),

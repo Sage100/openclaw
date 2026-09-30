@@ -79,12 +79,19 @@ export function sessionsBoardFallback(board: WorkboardSessionsBoard): WorkboardS
   return column;
 }
 
+/** Utility models often fence their JSON despite strict-output instructions. */
+function unfenceJson(text: string): string {
+  const trimmed = text.trim();
+  const fenced = /^```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)\n?```$/.exec(trimmed);
+  return fenced ? fenced[1].trim() : trimmed;
+}
+
 export function parseSessionPlacements(
   text: string,
   board: WorkboardSessionsBoard,
   sessions: readonly WorkboardSessionFacts[],
 ): Map<string, { columnId: string; reason: string }> {
-  const output: unknown = JSON.parse(text);
+  const output: unknown = JSON.parse(unfenceJson(text));
   if (!isRecord(output) || Object.keys(output).length !== 1 || !Array.isArray(output.placements)) {
     throw new Error("Utility model returned an invalid placements object.");
   }
