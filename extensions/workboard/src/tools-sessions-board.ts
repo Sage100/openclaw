@@ -69,6 +69,7 @@ const columnSchema = strictObject({
 
 export function createWorkboardSessionsBoardTools(params: {
   store: WorkboardStore;
+  caller: { assertCurrent: () => void };
   sessionsBoard?: Pick<WorkboardSessionsBoardService, "read" | "update" | "move" | "refresh">;
 }): AnyAgentTool[] {
   const service = () => {
@@ -127,7 +128,7 @@ export function createWorkboardSessionsBoardTools(params: {
         const record = asNonArrayRecord(rawParams);
         const boardId = await resolveBoardId(record);
         const { boardId: _boardId, ...patch } = record;
-        return jsonResult({ board: await service().update(boardId, patch) });
+        return jsonResult({ board: await service().update(boardId, patch, params.caller) });
       },
     },
     {
@@ -147,6 +148,7 @@ export function createWorkboardSessionsBoardTools(params: {
             await resolveBoardId(record),
             readStringParam(record, "sessionKey", { required: true }),
             readStringParam(record, "columnId", { required: true }),
+            params.caller,
           ),
         );
       },

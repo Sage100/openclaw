@@ -33,6 +33,25 @@ function createGatewayMethodCapture() {
 }
 
 describe("workboard gateway methods", () => {
+  it("refuses a Sessions board edit after the Gateway caller loses authority", async () => {
+    const store = createWorkboardSqliteTestStore();
+    const sessionsBoard = await startEmptySessionsBoardService(store);
+    const board = await store.upsertBoard({ id: "sessions", kind: "sessions" });
+    const { api, methods } = createGatewayMethodCapture();
+    registerWorkboardGatewayMethods({ api, store, sessionsBoard });
+    const respond = vi.fn();
+    await methods.get("workboard.sessionsBoard.update")!.handler({
+      params: { boardId: "sessions", patch: { instructions: "Revoked edit" } },
+      hasCurrentClientAuthority: () => false,
+      respond,
+    } as never);
+    expect(respond).toHaveBeenCalledWith(false, undefined, {
+      code: "workboard_error",
+      message: "Caller authority is no longer active.",
+    });
+    expect(await store.getSessionsBoard("sessions")).toEqual(board);
+  });
+
   it("rejects new client attachment bytes after disabling uploads without blocking agent output or reads", async () => {
     const { api, methods } = createGatewayMethodCapture();
     let config: OpenClawPluginApi["config"] = {};

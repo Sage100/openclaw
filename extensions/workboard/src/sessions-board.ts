@@ -54,15 +54,21 @@ type BoardState = {
   pending?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
 };
+type CallerAuthority = { assertCurrent: () => void };
 type Operations = {
   read: (boardId: string) => Promise<WorkboardSessionsBoardRead>;
-  update: (boardId: string, patch: unknown) => Promise<WorkboardSessionsBoard>;
+  update: (
+    boardId: string,
+    patch: unknown,
+    caller?: CallerAuthority,
+  ) => Promise<WorkboardSessionsBoard>;
   move: (
     boardId: string,
     sessionKey: string,
     columnId: string,
+    caller?: CallerAuthority,
   ) => Promise<WorkboardSessionsBoardRead>;
-  refresh: (boardId: string) => Promise<WorkboardSessionsBoardRead>;
+  refresh: (boardId: string, caller?: CallerAuthority) => Promise<WorkboardSessionsBoardRead>;
   /** Reclassify every active Sessions board, or only boards read within `viewedWithinMs`. */
   sweep: (options?: { viewedWithinMs?: number }) => Promise<void>;
 };
@@ -152,6 +158,10 @@ function createOwner(
     if (!isCurrent()) {
       throw new Error("Sessions board service is no longer active.");
     }
+  };
+  const interactiveAuthority = (caller?: CallerAuthority) => () => {
+    assertCurrent();
+    caller?.assertCurrent();
   };
   const stateFor = (id: string): BoardState => {
     let state = boards.get(id);
@@ -479,14 +489,16 @@ function createOwner(
       );
       boards.clear();
     },
-    async update(id, patch) {
-      assertCurrent();
-      const board = await params.store.updateSessionsBoard(id, patch, assertCurrent);
+    async update(id, patch, caller) {
+      const assertWriteCurrent = interactiveAuthority(caller);
+      assertWriteCurrent();
+      const board = await params.store.updateSessionsBoard(id, patch, assertWriteCurrent);
       void schedule(id);
       return board;
     },
-    async move(id, sessionKey, columnId) {
-      assertCurrent();
+    async move(id, sessionKey, columnId, caller) {
+      const assertWriteCurrent = interactiveAuthority(caller);
+      assertWriteCurrent();
       const board = await params.store.getSessionsBoard(id);
       if (!board.sessions.columns.some((column) => column.id === columnId)) {
         throw new Error("Unknown Sessions board column.");
@@ -522,7 +534,7 @@ function createOwner(
               expectedUpdatedAt: previous?.updatedAt,
             },
           ],
-          { expectedSpec: board.sessions, assertCurrent },
+          { expectedSpec: board.sessions, assertCurrent: assertWriteCurrent },
         ))
       ) {
         throw new Error("Sessions board changed. Refresh and retry the move.");
@@ -531,8 +543,9 @@ function createOwner(
       state.facts = [...state.facts.filter((entry) => entry.key !== sessionKey), facts];
       return await read(id);
     },
-    async refresh(id) {
+    async refresh(id, caller) {
       await params.store.getSessionsBoard(id);
+      interactiveAuthority(caller)();
       void schedule(id, true);
       return await read(id);
     },
@@ -602,9 +615,9 @@ export function createWorkboardSessionsBoardService(
       await owner.stop();
     },
     read: (id) => current().read(id),
-    update: (id, patch) => current().update(id, patch),
-    move: (id, key, column) => current().move(id, key, column),
-    refresh: (id) => current().refresh(id),
+    update: (id, patch, caller) => current().update(id, patch, caller),
+    move: (id, key, column, caller) => current().move(id, key, column, caller),
+    refresh: (id, caller) => current().refresh(id, caller),
     sweep: (options) => activeState().owner?.sweep(options) ?? Promise.resolve(),
   };
 }

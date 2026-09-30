@@ -28,6 +28,18 @@ import { WorkboardStore } from "./store.js";
 const READ_SCOPE = "operator.read" as const;
 const WRITE_SCOPE = "operator.write" as const;
 
+function sessionsBoardCaller(
+  hasCurrentClientAuthority: GatewayMethodContext["hasCurrentClientAuthority"],
+) {
+  return {
+    assertCurrent() {
+      if (hasCurrentClientAuthority?.() === false) {
+        throw new Error("Caller authority is no longer active.");
+      }
+    },
+  };
+}
+
 function redactDiagnosticsRows(result: Awaited<ReturnType<WorkboardStore["diagnostics"]>>) {
   return {
     ...result,
@@ -223,29 +235,39 @@ export function registerWorkboardGatewayMethods(params: {
     [
       "workboard.sessionsBoard.update",
       WRITE_SCOPE,
-      async ({ params: input }) => {
+      async ({ params: input, hasCurrentClientAuthority }: GatewayMethodContext) => {
         const boardId = readStringParam(input, "boardId", { required: true });
         if (!isRecord(input.patch)) {
           throw new Error("patch must be an object.");
         }
-        return { board: await sessionsBoard().update(boardId, input.patch) };
+        return {
+          board: await sessionsBoard().update(
+            boardId,
+            input.patch,
+            sessionsBoardCaller(hasCurrentClientAuthority),
+          ),
+        };
       },
     ],
     [
       "workboard.sessionsBoard.move",
       WRITE_SCOPE,
-      ({ params: input }) =>
+      ({ params: input, hasCurrentClientAuthority }: GatewayMethodContext) =>
         sessionsBoard().move(
           readStringParam(input, "boardId", { required: true }),
           readStringParam(input, "sessionKey", { required: true }),
           readStringParam(input, "columnId", { required: true }),
+          sessionsBoardCaller(hasCurrentClientAuthority),
         ),
     ],
     [
       "workboard.sessionsBoard.refresh",
       WRITE_SCOPE,
-      ({ params: input }) =>
-        sessionsBoard().refresh(readStringParam(input, "boardId", { required: true })),
+      ({ params: input, hasCurrentClientAuthority }: GatewayMethodContext) =>
+        sessionsBoard().refresh(
+          readStringParam(input, "boardId", { required: true }),
+          sessionsBoardCaller(hasCurrentClientAuthority),
+        ),
     ],
   ]);
 

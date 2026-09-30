@@ -5,7 +5,7 @@ import type {
 } from "@openclaw/workboard-contract";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWorkboardSessionsBoardService } from "./sessions-board.js";
-import { createWorkboardSqliteTestStore } from "./test/sqlite-store.js";
+import { createWorkboardSqliteTestHarness } from "./test/sqlite-store.js";
 
 type ServiceParams = Parameters<typeof createWorkboardSessionsBoardService>[0];
 type Completion = NonNullable<ServiceParams["complete"]>;
@@ -75,7 +75,7 @@ async function createFixture(options: {
   spec?: Partial<WorkboardSessionsBoardSpec>;
   complete?: Completion;
 }) {
-  const store = createWorkboardSqliteTestStore();
+  const { store, stores } = createWorkboardSqliteTestHarness();
   await store.upsertBoard({ id: BOARD_ID, kind: "sessions" });
   await store.updateSessionsBoard(BOARD_ID, { columns: MODEL_COLUMNS, ...options.spec });
   const state = {
@@ -102,10 +102,75 @@ async function createFixture(options: {
     complete,
   });
   await service.start({ config: {}, stateDir: "unused", logger });
-  return { store, state, request, readSessionFacts, complete, logger, service };
+  return { store, stores, state, request, readSessionFacts, complete, logger, service };
 }
 
 describe("Sessions board classification service", () => {
+  it.each(["update", "move"] as const)(
+    "rejects %s when caller authority ends while persistence is pending",
+    async (action) => {
+      await withService({ facts: [facts("one")] }, async ({ service, store, stores }) => {
+        await service.sweep();
+        const board = await store.getSessionsBoard(BOARD_ID);
+        const previous = await store.listSessionPlacements(BOARD_ID);
+        const entered = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        let active = true;
+        const caller = {
+          assertCurrent() {
+            if (!active) {
+              throw new Error("Caller authority is no longer active.");
+            }
+          },
+        };
+        const pause = async () => {
+          entered.resolve();
+          await release.promise;
+        };
+        const update = stores.sessionsBoard.update.bind(stores.sessionsBoard);
+        const write = stores.sessionsBoard.writePlacements.bind(stores.sessionsBoard);
+        using updateSpy = vi.spyOn(stores.sessionsBoard, "update");
+        updateSpy.mockImplementation(async (...args) => {
+          await pause();
+          return update(...args);
+        });
+        using writeSpy = vi.spyOn(stores.sessionsBoard, "writePlacements");
+        writeSpy.mockImplementation(async (...args) => {
+          await pause();
+          return write(...args);
+        });
+        const pending =
+          action === "update"
+            ? service.update(BOARD_ID, { instructions: "Revoked edit" }, caller)
+            : service.move(BOARD_ID, facts("one").key, "other", caller);
+        const rejected = expect(pending).rejects.toThrow("Caller authority is no longer active.");
+        try {
+          await entered.promise;
+          active = false;
+        } finally {
+          release.resolve();
+        }
+        await rejected;
+        expect(await store.getSessionsBoard(BOARD_ID)).toEqual(board);
+        expect(await store.listSessionPlacements(BOARD_ID)).toEqual(previous);
+      });
+    },
+  );
+
+  it("rejects a revoked refresh before scheduling classification", async () => {
+    await withService({ facts: [facts("one")] }, async ({ service, readSessionFacts }) => {
+      await expect(
+        service.refresh(BOARD_ID, {
+          assertCurrent() {
+            throw new Error("Caller authority is no longer active.");
+          },
+        }),
+      ).rejects.toThrow("Caller authority is no longer active.");
+      await service.stop();
+      expect(readSessionFacts).not.toHaveBeenCalled();
+    });
+  });
+
   it("takes the first full rule match and distinguishes unknown PR state from confirmed none", async () => {
     const digest = { health: "on-track", headline: "Making progress", revision: 1 } as const;
     await withService(

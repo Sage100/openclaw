@@ -146,8 +146,17 @@ export default definePluginEntry({
       },
     );
     // The docked Board agent needs these without a tools.allow entry.
-    api.registerTool(() => createWorkboardSessionsBoardTools({ store, sessionsBoard }), {
-      names: [...WORKBOARD_SESSIONS_BOARD_TOOL_NAMES],
-    });
+    api.registerTool(
+      {
+        contextVersion: 2,
+        create: (ctx) =>
+          createWorkboardSessionsBoardTools({
+            store,
+            sessionsBoard,
+            caller: { assertCurrent: ctx.assertInvocationCurrent },
+          }),
+      },
+      { names: [...WORKBOARD_SESSIONS_BOARD_TOOL_NAMES] },
+    );
   },
 });

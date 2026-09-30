@@ -101,6 +101,7 @@ saved board scope.
 Classification is shared across the Gateway and uses the configured utility
 model. Reads follow the current caller's session visibility; the board and its
 classification cache follow the Gateway's trusted-operator model.
+Interactive edits are admitted under the caller's live authority immediately before the write, while background classification runs under the plugin service's authority.
 
 New Sessions boards use these columns, in this order:
 
