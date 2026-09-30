@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 // Only the model is synthetic. Spawn, yield, completion, policy, and delivery are real.
 import fs from "node:fs";
 import http from "node:http";
-export const hash = (value) => createHash("sha256").update(String(value)).digest("hex");
+const hash = (value) => createHash("sha256").update(String(value)).digest("hex");
 const runToken = process.env.E2E_REPLY_POLICY_RUN;
 const markers = (cell) => ({
   request: "REPLY_POLICY_REQUEST_" + cell + "_" + runToken,

@@ -106,6 +106,7 @@ vi.mock("./subagent-announce-delivery.js", () => ({
 
 import type { RequesterSettleWakeBatchState } from "./subagent-announce.requester-settle-state.js";
 import { maybeWakeRequesterAfterAllChildrenSettled } from "./subagent-announce.requester-settle-wake.js";
+import { makeSettledChild } from "./subagent-announce.requester-settle-wake.test-support.js";
 
 const tempDirs = useAutoCleanupTempDirTracker((cleanup) =>
   afterEach(async () => {
@@ -121,26 +122,19 @@ const SESSION_LANE = `session:${REQUESTER_KEY}`;
 const GLOBAL_LANE = "subagent-settle-dispatch-proof";
 
 function settledChild(): SubagentRunRecord {
-  return {
+  return makeSettledChild({
     runId: "settled-child",
-    childSessionKey: "agent:main:subagent:settled-child",
-    requesterSessionKey: REQUESTER_KEY,
-    requesterDisplayKey: "main",
     requesterAgentId: "main",
     task: "finish child work",
-    cleanup: "keep",
-    createdAt: 1_000,
-    execution: { status: "terminal", startedAt: 2_000, endedAt: 3_000, outcome: { status: "ok" } },
-    expectsCompletionMessage: true,
+    outcome: { status: "ok" },
     completion: { required: true, resultText: "child result", capturedAt: 3_000 },
-    delivery: { status: "delivered" },
     requesterSettleWake: {
       status: "pending",
       attemptCount: 0,
       requesterYieldBatch: true,
       rearmGeneration: 1,
     },
-  };
+  });
 }
 
 function createContext(): GatewayRequestContext {
