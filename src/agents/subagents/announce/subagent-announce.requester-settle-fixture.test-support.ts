@@ -27,7 +27,9 @@ const { registryRuntimeMock, findTranscriptEventMock, readDescendantFacts } = vi
     typeof import("../../../config/sessions/session-accessor.js").findTranscriptEvent
   >(async () => undefined),
   registryRuntimeMock: {
-    getLatestLiveSubagentRunByChildSessionKey: vi.fn(() => undefined),
+    getLatestLiveSubagentRunByChildSessionKey: vi.fn<() => SubagentRunRecord | undefined>(
+      () => undefined,
+    ),
     countPendingDescendantRuns: vi.fn((_rootSessionKey: string) => 0),
     isSubagentSessionRunActive: vi.fn((_childSessionKey: string) => true),
     shouldIgnorePostCompletionAnnounceForSession: vi.fn((_childSessionKey: string) => false),
@@ -115,6 +117,9 @@ beforeEach(() => {
   readDescendantFacts.mockReset().mockResolvedValue({ unsettled: false, active: 0 });
   registryRuntimeMock.listSubagentRunsForRequester.mockReset().mockReturnValue([]);
   registryRuntimeMock.getLatestSubagentRunByChildSessionKey.mockReset().mockReturnValue(undefined);
+  registryRuntimeMock.getLatestLiveSubagentRunByChildSessionKey
+    .mockReset()
+    .mockReturnValue(undefined);
 });
 
 function setSessionStore(store: typeof sessionStore): void {

@@ -8,15 +8,18 @@ export function buildRequesterSettleWakeIdentity(params: {
   rearmGeneration?: number;
   attemptIndex?: number;
   /**
-   * Private turns reuse one key across attempts: a retry must not republish
+   * Private completion turns reuse one key across attempts: a retry must not republish
    * private input under a new identity. Deliverable turns suffix each retry so a
    * cached terminal failure cannot replay in place of a new delivery attempt.
+   * Pause notices also use fresh attempts, even when their completion stays private.
    */
   sharedAttemptKey?: boolean;
+  pause?: boolean;
 }): { batchKey: string; runId: string } {
   const batchKey = [
     `requester-settle:${params.requesterAgentId ?? "unknown"}:${params.requesterSessionKey}:${params.batchRunIds.toSorted().join(",")}`,
     params.rearmGeneration === undefined ? undefined : `yield-${params.rearmGeneration}`,
+    params.pause ? "pause" : undefined,
   ]
     .filter(Boolean)
     .join(":");
@@ -24,7 +27,7 @@ export function buildRequesterSettleWakeIdentity(params: {
   return {
     batchKey,
     runId: buildAnnounceIdempotencyKey(
-      params.sharedAttemptKey || attemptIndex === 0
+      (params.sharedAttemptKey && !params.pause) || attemptIndex === 0
         ? batchKey
         : `${batchKey}:retry-${attemptIndex}`,
     ),
@@ -40,7 +43,8 @@ export function isRequesterSettleWakeForRun(params: {
 }): boolean {
   const { entry, requesterSessionKey, requesterAgentId } = params;
   const wake = entry.requesterSettleWake;
-  const batchRunIds = wake?.batchRunIds;
+  const pauseNotice = entry.pauseReason === "sessions_yield" && wake?.pauseNotice;
+  const batchRunIds = pauseNotice ? [entry.runId] : wake?.batchRunIds;
   if (
     entry.requesterSessionKey !== requesterSessionKey ||
     (entry.requesterAgentId && entry.requesterAgentId !== requesterAgentId) ||
@@ -75,6 +79,7 @@ export function isRequesterSettleWakeForRun(params: {
       rearmGeneration: wake.rearmGeneration,
       attemptIndex: wake.attemptCount - 1,
       sharedAttemptKey,
+      pause: Boolean(pauseNotice),
     }).runId
   );
 }
