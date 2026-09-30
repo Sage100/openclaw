@@ -33,7 +33,6 @@ extensions/anthropic/session-catalog-runtime.ts	1
 extensions/anthropic/stream-wrappers.ts	3
 extensions/baseten/models.ts	3
 extensions/beam/src/mirror.ts	2
-extensions/beam/src/types.ts	2
 extensions/browser/src/browser-node-fallback.ts	1
 extensions/browser/src/browser-node-proxy.ts	2
 extensions/browser/src/browser-proxy-upload.ts	2
@@ -218,7 +217,6 @@ extensions/diagnostics-otel/src/service-logs.ts	10
 extensions/diagnostics-otel/src/service-propagation.ts	2
 extensions/diagnostics-otel/src/service-trace-context.ts	1
 extensions/diagnostics-otel/src/service.ts	1
-extensions/diagnostics-prometheus/src/service.ts	1
 extensions/diffs/src/config.ts	2
 extensions/diffs/src/language-hints.ts	6
 extensions/diffs/src/plugin.ts	4
@@ -334,7 +332,6 @@ extensions/discord/src/voice/realtime-turns.ts	3
 extensions/discord/src/voice/receive-recovery.ts	1
 extensions/discord/src/voice/sdk-runtime.ts	1
 extensions/discord/src/voice/segment.ts	1
-extensions/duckduckgo/src/config.ts	1
 extensions/duckduckgo/src/ddg-search-provider.ts	1
 extensions/elevenlabs/config-compat.ts	2
 extensions/exa/src/exa-web-search-provider.runtime.ts	1
@@ -402,11 +399,9 @@ extensions/github-copilot/runtime-auth.ts	2
 extensions/github-copilot/usage.ts	1
 extensions/google-meet/index.ts	1
 extensions/google-meet/src/calendar.ts	1
-extensions/google-meet/src/cli-doctor.ts	1
-extensions/google-meet/src/cli-runtime-commands.ts	4
+extensions/google-meet/src/cli-runtime-commands.ts	1
 extensions/google-meet/src/cli-space-commands.ts	3
 extensions/google-meet/src/meet-api.ts	1
-extensions/google-meet/src/plugin-registration.ts	1
 extensions/google-meet/src/transports/chrome-create.ts	1
 extensions/google/cli-backend-auth.runtime.ts	1
 extensions/google/cli-backend-isolated-auth.runtime.ts	5
@@ -419,12 +414,10 @@ extensions/google/realtime-voice-provider.ts	4
 extensions/google/transport-stream.ts	13
 extensions/google/vertex-adc.ts	4
 extensions/google/video-generation-provider.ts	13
-extensions/googlechat/src/accounts.ts	1
 extensions/googlechat/src/approval-card-actions.ts	1
 extensions/googlechat/src/approval-handler.runtime.ts	1
 extensions/googlechat/src/google-auth.runtime.ts	4
 extensions/googlechat/src/monitor-event.ts	2
-extensions/googlechat/src/setup-core.ts	1
 extensions/groq/index.ts	2
 extensions/huggingface/index.ts	1
 extensions/huggingface/models.ts	2
@@ -478,7 +471,7 @@ extensions/llm-task/doctor-contract-api.ts	1
 extensions/llm-task/src/llm-task-tool.ts	2
 extensions/lmstudio/src/models.ts	2
 extensions/lmstudio/src/stream.ts	2
-extensions/lobster/src/lobster-runner.ts	3
+extensions/lobster/src/lobster-runner.ts	2
 extensions/logbook/index.ts	5
 extensions/logbook/src/analyze.ts	5
 extensions/logbook/src/service.ts	6
@@ -560,7 +553,7 @@ extensions/matrix/src/setup-core.ts	5
 extensions/matrix/src/setup-dm-policy.ts	5
 extensions/matrix/src/test-runtime.ts	9
 extensions/matrix/src/tool-actions.ts	1
-extensions/mattermost/src/channel.ts	6
+extensions/mattermost/src/channel.ts	5
 extensions/mattermost/src/gateway-auth-bypass.ts	3
 extensions/mattermost/src/mattermost/client.ts	6
 extensions/mattermost/src/mattermost/directory.ts	2
@@ -678,8 +671,7 @@ extensions/nextcloud-talk/src/policy.ts	2
 extensions/nextcloud-talk/src/send.ts	1
 extensions/nextcloud-talk/src/setup-core.ts	8
 extensions/nextcloud-talk/src/setup-surface.ts	11
-extensions/nostr/index.ts	4
-extensions/nostr/src/channel.setup.ts	2
+extensions/nostr/index.ts	2
 extensions/nostr/src/gateway.ts	1
 extensions/nostr/src/metrics.ts	1
 extensions/nostr/src/nostr-bus.ts	7
@@ -687,8 +679,6 @@ extensions/nostr/src/nostr-cursor.ts	2
 extensions/nostr/src/nostr-ingress.ts	4
 extensions/nostr/src/nostr-profile-http.ts	1
 extensions/nostr/src/nostr-profile-import.ts	1
-extensions/nostr/src/setup-surface.ts	2
-extensions/nostr/src/types.ts	3
 extensions/nvidia/provider-catalog.ts	1
 extensions/oc-path/src/oc-path/find.ts	9
 extensions/oc-path/src/oc-path/universal.ts	4
@@ -874,7 +864,7 @@ extensions/signal/src/send.ts	1
 extensions/signal/src/signal-ingress.ts	2
 extensions/slack/src/accounts.ts	6
 extensions/slack/src/action-runtime.ts	1
-extensions/slack/src/actions.ts	5
+extensions/slack/src/actions.ts	3
 extensions/slack/src/approval-actions.ts	1
 extensions/slack/src/approval-handler.runtime.ts	1
 extensions/slack/src/approval-native-gates.ts	1
@@ -1129,7 +1119,7 @@ extensions/zalouser/src/text-styles-inline.ts	1
 extensions/zalouser/src/text-styles-ranges.ts	1
 extensions/zalouser/src/text-styles-source.ts	1
 extensions/zalouser/src/tool.ts	1
-extensions/zalouser/src/zalo-js.ts	11
+extensions/zalouser/src/zalo-js.ts	9
 extensions/zalouser/src/zca-client.ts	2
 packages/acp-core/src/runtime/errors.ts	6
 packages/agent-core/src/agent-loop.ts	3
@@ -1257,7 +1247,7 @@ packages/normalization-core/src/record-coerce.ts	1
 packages/normalization-core/src/stable-stringify.ts	1
 packages/normalization-core/src/string-coerce.ts	1
 packages/sdk/src/event-hub.ts	2
-packages/sdk/src/transport.ts	3
+packages/sdk/src/transport.ts	2
 packages/terminal-core/src/note.ts	1
 packages/terminal-core/src/prompt-select-styled-params.ts	1
 packages/terminal-core/src/stream-writer.ts	1
@@ -1976,7 +1966,7 @@ src/commands/doctor/shared/codex-route-config-repair.ts	1
 src/commands/doctor/shared/codex-route-session-repair.ts	1
 src/commands/doctor/shared/configured-channel-ids.ts	1
 src/commands/doctor/shared/empty-allowlist-policy.ts	12
-src/commands/doctor/shared/empty-allowlist-scan.ts	17
+src/commands/doctor/shared/empty-allowlist-scan.ts	4
 src/commands/doctor/shared/legacy-config-compat.ts	1
 src/commands/doctor/shared/legacy-config-core-migrate.ts	1
 src/commands/doctor/shared/legacy-config-core-normalizers.ts	11
@@ -2402,7 +2392,7 @@ src/infra/kysely-sync-cache-state.ts	1
 src/infra/kysely-sync.ts	7
 src/infra/net/fetch-guard.ts	2
 src/infra/net/form-data.ts	2
-src/infra/net/node-proxy-agent.ts	2
+src/infra/net/node-proxy-agent.ts	1
 src/infra/net/proxy-fetch.ts	2
 src/infra/net/proxy/proxy-validation.ts	1
 src/infra/net/runtime-fetch.ts	5
@@ -2683,7 +2673,7 @@ src/plugins/hook-types.ts	2
 src/plugins/hooks.ts	9
 src/plugins/host-hook-attachments.ts	1
 src/plugins/host-hook-runtime.ts	1
-src/plugins/host-hook-scheduled-turns.ts	6
+src/plugins/host-hook-scheduled-turns.ts	4
 src/plugins/host-hook-state.ts	6
 src/plugins/install-managed-npm-state.ts	2
 src/plugins/install-npm-metadata.ts	1
@@ -2972,10 +2962,10 @@ ui/src/app/settings.ts	2
 ui/src/app/stale-chunk-reload.ts	1
 ui/src/app/startup-settings.ts	1
 ui/src/app/user-profile.ts	2
-ui/src/app/web-push.runtime.ts	2
+ui/src/app/web-push.runtime.ts	1
 ui/src/components/agent-select.ts	2
 ui/src/components/app-sidebar-agent-menu.ts	2
-ui/src/components/app-sidebar-nav-menus.ts	6
+ui/src/components/app-sidebar-nav-menus.ts	2
 ui/src/components/app-sidebar-render.ts	4
 ui/src/components/app-sidebar-session-catalog-render.ts	4
 ui/src/components/app-sidebar-session-list-render.ts	1
@@ -3036,11 +3026,10 @@ ui/src/components/terminal/terminal-pending-actions.ts	1
 ui/src/components/theme-mode-toggle.ts	1
 ui/src/components/web-awesome.ts	2
 ui/src/components/wizard-step-controls.ts	4
-ui/src/i18n/lib/registry.ts	2
 ui/src/i18n/lib/translate.ts	1
 ui/src/lib/agents/display.ts	6
 ui/src/lib/board/gateway-provider.ts	2
-ui/src/lib/board/widget-bridge.ts	3
+ui/src/lib/board/widget-bridge.ts	2
 ui/src/lib/board/widget-sandbox-host.ts	1
 ui/src/lib/chat/message-extract.ts	5
 ui/src/lib/chat/message-normalizer.ts	2
@@ -3050,12 +3039,10 @@ ui/src/lib/chat/tool-call-patch.ts	1
 ui/src/lib/chat/tool-cards.ts	2
 ui/src/lib/config-form-utils.ts	3
 ui/src/lib/config/config-draft-model.ts	3
-ui/src/lib/cron/index.ts	2
 ui/src/lib/gateway-errors.ts	1
 ui/src/lib/keyboard-shortcuts.ts	1
 ui/src/lib/nodes/index.ts	2
 ui/src/lib/nodes/inventory.ts	1
-ui/src/lib/plugin-activation.ts	3
 ui/src/lib/session-pull-requests.ts	2
 ui/src/lib/sessions/custom-groups.ts	5
 ui/src/lib/sessions/grouping.ts	4
@@ -3087,7 +3074,7 @@ ui/src/pages/chat/chat-send-composer.ts	1
 ui/src/pages/chat/chat-send-timing.ts	1
 ui/src/pages/chat/chat-state-events.ts	6
 ui/src/pages/chat/chat-state-page.ts	2
-ui/src/pages/chat/chat-thread-items.ts	2
+ui/src/pages/chat/chat-thread-items.ts	1
 ui/src/pages/chat/components/chat-audio-player.ts	1
 ui/src/pages/chat/components/chat-composer-plus-menu.ts	1
 ui/src/pages/chat/components/chat-composer-view.ts	1
@@ -3122,7 +3109,6 @@ ui/src/pages/chat/session-cache.ts	2
 ui/src/pages/chat/stream-reconciliation.ts	3
 ui/src/pages/chat/talk/gateway-relay.ts	1
 ui/src/pages/chat/talk/google-live.ts	1
-ui/src/pages/chat/talk/session.ts	1
 ui/src/pages/chat/talk/shared.ts	3
 ui/src/pages/chat/talk/webrtc.ts	1
 ui/src/pages/chat/workspace-conflict.ts	2
