@@ -42,6 +42,7 @@ import {
 } from "../../plugins/memory-state.test-fixtures.js";
 import { createEmptyPluginRegistry } from "../../plugins/registry-empty.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
+import { closeOpenClawAgentDatabasesAsync } from "../../state/openclaw-agent-db.js";
 import type { ReplyPayload } from "../types.js";
 import {
   runMemoryFlushIfNeeded as runMemoryFlushIfNeededRaw,
@@ -478,6 +479,9 @@ describe("runMemoryFlushIfNeeded", () => {
     cliBackendsTesting.resetDepsForTest();
     setActivePluginRegistry(createEmptyPluginRegistry());
     clearMemoryPluginState();
+    // Session writes leave deferred maintenance and history Workers on rootDir's agent
+    // database; an open during removal recreates files and fails rmdir with ENOTEMPTY.
+    await closeOpenClawAgentDatabasesAsync(rootDir);
     await fs.rm(rootDir, { recursive: true, force: true });
   });
 
