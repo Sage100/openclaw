@@ -49,6 +49,11 @@ Import works with any readable catalog, including sources on the Gateway,
 headless paired nodes, the macOS app, and the Linux app. The source must be
 reachable during import. The imported copy is an ordinary OpenClaw session owned
 by the selected agent, with source provenance and an untrusted-reference notice.
+Imported copies start as [drafts](/concepts/multi-user#drafts), visible only to
+their creator and Gateway admins. Publish the copy through the existing session
+sharing controls to share it with other people. Re-importing preserves the copy's
+current visibility, including an explicitly published copy.
+When drafts are disabled, imported copies follow the Gateway's default visibility.
 The Control UI and CLI `--all` supply the catalog row's name as the initial title
 when available. A single-session CLI import uses a generic
 `Imported <catalog label> session` title. RPC callers can supply `displayName`

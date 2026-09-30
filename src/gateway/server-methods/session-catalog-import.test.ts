@@ -1,483 +1,212 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  SessionCatalogTranscriptItem,
-  SessionsCatalogImportParams,
-} from "../../../packages/gateway-protocol/src/index.js";
-import { setRuntimeConfigSnapshot } from "../../config/runtime-snapshot.js";
-import {
-  loadSessionEntryReadOnly,
-  upsertSessionEntryCore,
-} from "../../config/sessions/session-accessor.sqlite-entry.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ErrorShape } from "../../../packages/gateway-protocol/src/index.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import * as transcriptRuntime from "../../plugin-sdk/session-transcript-runtime.js";
-import { createEmptyPluginRegistry } from "../../plugins/registry-empty.js";
-import { getActivePluginRegistry, setActivePluginRegistry } from "../../plugins/runtime.js";
-import { withPluginRuntimeGatewayRequestScope } from "../../plugins/runtime/gateway-request-scope.js";
+import type { preserveSessionCatalogHistory } from "../../plugins/session-catalog-history-import.js";
 import type { SessionCatalogProvider } from "../../plugins/session-catalog.js";
-import { listSessionStateEventsSince } from "../../sessions/session-state-events.js";
-import { readSessionUpstreamLink } from "../../sessions/session-upstream-links.js";
-import { ensureProfileForEmail } from "../../state/user-profiles.js";
-import { createOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
-import { buildSessionCatalogImportKey } from "../session-create-key.js";
-import * as sessionCreation from "../session-create-service.js";
-import { bindSessionRowProjection } from "../session-row-projection-access.js";
-import { createSessionRowProjection } from "../session-row-projection.js";
-import { sessionCatalogHandlers } from "./session-catalog.js";
-import {
-  createSessionMutationTestClient,
-  createSessionMutationTestContext,
-} from "./sessions-mutations.owner.test-support.js";
-import type { GatewayClient, RespondFn } from "./types.js";
+import type { createGatewaySession } from "../session-create-service.js";
+import type { resolveSessionMutationAuthorization } from "../session-sharing.js";
+import type { SessionCatalogThreadVisibility } from "./session-catalog-visibility.js";
+import { createSessionMutationTestContext } from "./sessions-mutations.owner.test-support.js";
 
-let state: Awaited<ReturnType<typeof createOpenClawTestState>>;
-let nextCatalog = 0;
-beforeAll(async () => {
-  state = await createOpenClawTestState({ scenario: "minimal", label: "catalog-import" });
-});
-beforeEach(() => state.applyEnv());
-afterAll(async () => state.cleanup());
+const mocks = vi.hoisted(() => ({
+  create: vi.fn<typeof createGatewaySession>(),
+  preserve: vi.fn<typeof preserveSessionCatalogHistory>(),
+  record: vi.fn(),
+  authorize: vi.fn<typeof resolveSessionMutationAuthorization>(),
+  visibility: vi.fn<() => SessionCatalogThreadVisibility["visibility"]>(),
+  visibilityAllowed:
+    vi.fn<typeof import("../session-sharing-policy.js").isSessionVisibilityAllowed>(),
+}));
 
-async function withCatalog(
-  run: (fixture: Awaited<ReturnType<typeof createCatalog>>) => Promise<void>,
-  restricted = false,
-) {
-  const previousRegistry = getActivePluginRegistry() ?? createEmptyPluginRegistry();
-  const fixture = await createCatalog(restricted);
-  try {
-    await state.writeConfig(fixture.config);
-    setRuntimeConfigSnapshot(fixture.config);
-    await run(fixture);
-  } finally {
-    vi.restoreAllMocks();
-    fixture.projection.dispose();
-    setActivePluginRegistry(previousRegistry);
-  }
+// Durable creation, projection, and transcript custody remain covered together
+// in the release-tier integration suite; this file exercises import orchestration.
+vi.mock("../session-create-service.js", () => ({ createGatewaySession: mocks.create }));
+vi.mock("../../sessions/session-state-events.js", () => ({
+  recordSessionStateEventAsync: mocks.record,
+}));
+vi.mock("../../plugin-sdk/session-transcript-runtime.js", () => ({
+  withSessionTranscriptWriteLock: vi.fn(),
+}));
+vi.mock("../../plugins/session-catalog-history-import.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../plugins/session-catalog-history-import.js")>()),
+  preserveSessionCatalogHistory: mocks.preserve,
+}));
+vi.mock("../session-sharing.js", () => ({
+  resolveSessionMutationAuthorization: mocks.authorize,
+}));
+vi.mock("../session-sharing-policy.js", () => ({
+  hasSessionReadAccessChanged: vi.fn(),
+  isSessionVisibilityAllowed: mocks.visibilityAllowed,
+}));
+vi.mock("../session-sharing-target-read.js", () => ({
+  readProjectedSessionMutationTarget: vi.fn(),
+}));
+vi.mock("./session-catalog-visibility.js", () => ({
+  resolveSessionCatalogVisibility: mocks.visibility,
+  isPublishedCatalogVisible: vi.fn(() => true),
+}));
+vi.mock("../session-identity-projection.js", () => ({ projectSessionParticipant: vi.fn() }));
+// Keep the real commit-guard composition without loading unrelated WS admission owners.
+vi.mock("../auth-policy.js", () => ({}));
+vi.mock("../operator-role-policy.js", () => ({}));
+vi.mock("../server-shared-auth-generation.js", () => ({}));
+
+const { importAuthorizedSessionCatalog } = await import("./session-catalog-import.js");
+
+const visibility: SessionCatalogThreadVisibility["visibility"] = {
+  kind: "unrestricted",
+  cacheKey: "original-grant",
+};
+const denied: ErrorShape = { code: "FORBIDDEN", message: "Destination is not writable" };
+
+function fixture(config: OpenClawConfig = {}) {
+  const read = vi.fn<SessionCatalogProvider["read"]>(async ({ hostId, threadId }) => ({
+    hostId,
+    threadId,
+    label: "Private host title",
+    items: [{ id: "first", type: "userMessage", text: "Synthetic source message" }],
+  }));
+  const reauthorize = vi.fn<() => Promise<SessionCatalogThreadVisibility | null>>(async () => ({
+    visibility,
+  }));
+  const commitGuard = vi.fn();
+  const provider: SessionCatalogProvider = {
+    id: "fixture",
+    label: "Fixture",
+    list: vi.fn(),
+    read,
+  };
+  const run = () =>
+    importAuthorizedSessionCatalog({
+      request: {
+        catalogId: "fixture",
+        hostId: "node:fixture",
+        threadId: "thread-one",
+      },
+      provider,
+      agentId: "main",
+      allowProcessHomeFallback: false,
+      client: null,
+      context: createSessionMutationTestContext(config),
+      reauthorize,
+      commitGuard,
+    });
+  return { read, reauthorize, commitGuard, run };
 }
 
-async function createCatalog(restricted: boolean) {
-  const config: OpenClawConfig = {
-    plugins: { enabled: false },
-    ...(restricted
-      ? {
-          gateway: {
-            roles: {
-              default: "reader",
-              definitions: {
-                reader: {
-                  sessions: { others: "view" as const },
-                  agents: "*" as const,
-                  scopes: ["operator.read", "operator.write"],
-                },
-              },
-            },
-          },
-        }
-      : {}),
-  };
-  const id = ++nextCatalog;
-  const client = createSessionMutationTestClient(
-    ensureProfileForEmail("catalog-import@example.test").id,
-  );
-  client.connect.scopes = restricted ? ["operator.read", "operator.write"] : ["operator.admin"];
-  const other = createSessionMutationTestClient(
-    ensureProfileForEmail("other-importer@example.test").id,
-  );
-  const nativeKey = `agent:main:native-adopted-${id}`;
-  const seedNative = () =>
-    upsertSessionEntryCore(
-      { agentId: "main", sessionKey: nativeKey },
-      {
-        sessionId: "native-source",
-        updatedAt: 1,
-        pluginOwnerId: "fixture",
-        createdVia: "operator",
-        createdActor: {
-          type: "human",
-          source: "profile",
-          id: client.authenticatedUserProfile!.profileId,
-        },
-      },
-    );
-  if (restricted) {
-    await seedNative();
-  }
-  const source: SessionCatalogTranscriptItem[] = [
-    { id: "question", type: "userMessage", text: "Synthetic imported question" },
-    { type: "agentMessage", text: "Synthetic imported answer" },
-  ];
-  const read = vi.fn<SessionCatalogProvider["read"]>(
-    async ({ hostId, threadId, cursor, limit }) => {
-      const offset = cursor ? Number(cursor) : 0;
-      const items = source.toReversed().slice(offset, offset + (limit ?? 50));
-      const next = offset + items.length;
+function expectNoWrites() {
+  expect(mocks.create).not.toHaveBeenCalled();
+  expect(mocks.preserve).not.toHaveBeenCalled();
+  expect(mocks.record).not.toHaveBeenCalled();
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.visibility.mockReturnValue(visibility);
+  mocks.visibilityAllowed.mockReturnValue(true);
+  mocks.authorize.mockReturnValue({ error: null });
+});
+
+describe("session catalog import orchestration", () => {
+  it("leaves creation visibility to the Gateway default when drafts are disabled", async () => {
+    const config: OpenClawConfig = { session: { sharing: { drafts: false } } };
+    mocks.visibilityAllowed.mockReturnValue(false);
+    mocks.create.mockResolvedValue({
+      ok: true,
+      agentId: "main",
+      key: "agent:main:imported",
+      entry: { sessionId: "imported", updatedAt: 1 },
+      resolved: { modelProvider: "fixture", model: "fixture" },
+      resetExisting: false,
+      postCommit: { status: "completed" },
+    });
+    await expect(fixture(config).run()).resolves.toMatchObject({ ok: true });
+    expect(mocks.visibilityAllowed).toHaveBeenCalledWith(config, "draft");
+    expect(mocks.create.mock.calls[0]?.[0]).not.toHaveProperty("defaultVisibility");
+  });
+
+  it("returns destination authorization failures without creating or recording an import", async () => {
+    mocks.authorize.mockReturnValue({ error: denied });
+    await expect(fixture().run()).resolves.toEqual({ ok: false, error: denied });
+    expectNoWrites();
+  });
+
+  it("discards fetched history when source reauthorization denies access", async () => {
+    const subject = fixture();
+    subject.reauthorize.mockResolvedValue(null);
+    await expect(subject.run()).resolves.toBeNull();
+    expect(subject.read).toHaveBeenCalledOnce();
+    expectNoWrites();
+  });
+
+  it("stops before reading another page after request custody is revoked", async () => {
+    const subject = fixture();
+    subject.read.mockImplementationOnce(async ({ hostId, threadId }) => {
+      subject.commitGuard.mockImplementation(() => {
+        throw new Error("Request custody revoked");
+      });
       return {
         hostId,
         threadId,
-        label: "Fixture host label",
-        items,
-        ...(next < source.length ? { nextCursor: String(next) } : {}),
+        items: [{ id: "newest", type: "userMessage", text: "Newest page" }],
+        nextCursor: "older-page",
       };
-    },
-  );
-  const list = vi.fn<SessionCatalogProvider["list"]>(async () => {
-    if (!restricted) {
-      throw new Error("Unrestricted import must not enumerate the catalog");
-    }
-    return [
-      {
-        hostId: "node:fixture",
-        label: "Fixture node",
-        kind: "node",
-        connected: true,
-        sessions: [
-          {
-            threadId: `thread-${id}`,
-            sourceHomeId: "home-a",
-            sessionKey: nativeKey,
-            name: "Native source",
-            status: "stored",
-            archived: false,
-            canContinue: true,
-            canArchive: false,
-          },
-        ],
-      },
-    ];
+    });
+    await expect(subject.run()).rejects.toThrow("Request custody revoked");
+    expect(subject.read).toHaveBeenCalledOnce();
+    expect(subject.reauthorize).not.toHaveBeenCalled();
+    expectNoWrites();
   });
-  const provider: SessionCatalogProvider = { id: "claude", label: "Claude", list, read };
-  const registry = createEmptyPluginRegistry();
-  registry.sessionCatalogs.push({ pluginId: "fixture", source: import.meta.url, provider });
-  setActivePluginRegistry(registry);
-  const projection = await createSessionRowProjection({ cfg: config, getConfig: () => config });
-  const context = bindSessionRowProjection(
-    {
-      ...createSessionMutationTestContext(config),
-      logGateway: { error: vi.fn(), warn: vi.fn() },
-      getRuntimeConfig: () => config,
-      loadGatewayModelCatalogSnapshot: async () => ({ entries: [], routeVariants: [] }),
-    },
-    () => projection,
-  );
-  const locator: SessionsCatalogImportParams = {
-    catalogId: "claude",
-    hostId: "node:fixture",
-    sourceHomeId: "home-a",
-    threadId: `thread-${id}`,
-    agentId: "main",
-    displayName: "  Preserved investigation  ",
-  };
-  const key = buildSessionCatalogImportKey("main", locator);
-  const call = async (
-    method: "sessions.catalog.import" | "sessions.catalog.continue" = "sessions.catalog.import",
-    requestClient: GatewayClient = client,
-  ) => {
-    const respond = vi.fn<RespondFn>();
-    const { displayName: _displayName, ...sourceLocator } = locator;
-    await withPluginRuntimeGatewayRequestScope(
-      { client: requestClient, pluginRegistry: registry, isWebchatConnect: () => false },
-      () =>
-        sessionCatalogHandlers[method]!({
-          params: method === "sessions.catalog.import" ? locator : sourceLocator,
-          client: requestClient,
-          respond,
-          context,
-        } as never),
-    );
-    return respond;
-  };
-  const transcript = async () => {
-    const entry = loadSessionEntryReadOnly({ agentId: "main", sessionKey: key });
-    return entry
-      ? transcriptRuntime.readVisibleSessionTranscriptMessageEntries({
-          agentId: "main",
-          sessionKey: key,
-          sessionId: entry.sessionId,
-        })
-      : [];
-  };
-  const precreate = async (owner = client) => {
-    const created = await sessionCreation.createGatewaySession({
-      cfg: config,
+
+  it("rechecks the source grant at the creation commit boundary", async () => {
+    mocks.create.mockImplementation(async ({ commitGuard }) => {
+      mocks.visibility.mockReturnValue({ kind: "unrestricted", cacheKey: "replacement-grant" });
+      commitGuard?.();
+      throw new Error("Stale source grant reached creation");
+    });
+    await expect(fixture().run()).rejects.toThrow("Session catalog source visibility changed");
+    expect(mocks.preserve).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it("retains destination authority in the creation commit guard", async () => {
+    mocks.authorize.mockReturnValue({
+      error: null,
+      authorization: {
+        assertCurrent: () => {
+          throw new Error("Destination authority revoked");
+        },
+        assertTargetCurrent: vi.fn(),
+      },
+    });
+    mocks.create.mockImplementation(async ({ commitGuard }) => {
+      commitGuard?.();
+      throw new Error("Revoked destination reached creation");
+    });
+    await expect(fixture().run()).rejects.toThrow("Destination authority revoked");
+    expect(mocks.preserve).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it("returns creation refusal without a successful import event", async () => {
+    mocks.create.mockResolvedValue({ ok: false, error: denied });
+    await expect(fixture().run()).resolves.toEqual({ ok: false, error: denied });
+    expect(mocks.preserve).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it("reports a post-commit import failure instead of recording success", async () => {
+    const failure = new Error("Transcript write failed");
+    mocks.create.mockResolvedValue({
+      ok: true,
       agentId: "main",
-      key,
-      commandSource: "test",
-      operatorRoleActor: { kind: "system" },
-      creation: {
-        via: "operator",
-        actor: {
-          type: "human",
-          source: "profile",
-          id: owner.authenticatedUserProfile!.profileId,
-        },
-      },
+      key: "agent:main:imported",
+      entry: { sessionId: "imported", updatedAt: 1 },
+      resolved: { modelProvider: "fixture", model: "fixture" },
+      resetExisting: false,
+      postCommit: { status: "failed", error: failure },
     });
-    expect(created.ok).toBe(true);
-    await projection.ensureMaterialized();
-    await projection.prepareMembership();
-  };
-  return {
-    other,
-    nativeKey,
-    seedNative,
-    precreate,
-    config,
-    client,
-    source,
-    provider,
-    list,
-    read,
-    projection,
-    locator,
-    key,
-    call,
-    transcript,
-  };
-}
-
-describe("sessions.catalog.import with durable Gateway owners", () => {
-  it("creates and syncs an ordinary durable session through real creation, projection, and transcript owners", async () => {
-    await withCatalog(async (fixture) => {
-      expect(await fixture.call()).toHaveBeenCalledWith(true, {
-        sessionKey: fixture.key,
-        importedItems: 2,
-        totalItems: 2,
-        complete: true,
-        created: true,
-      });
-      const first = await fixture.transcript();
-      expect(first).toHaveLength(3);
-      expect(JSON.stringify(first)).toContain("Synthetic imported question");
-      expect(JSON.stringify(first)).toContain("EXTERNAL_UNTRUSTED_CONTENT");
-      expect(
-        loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key })?.displayName,
-      ).toBe("Preserved investigation");
-      fixture.locator.displayName = "Changed source title";
-      expect(await fixture.call()).toHaveBeenCalledWith(true, {
-        sessionKey: fixture.key,
-        importedItems: 0,
-        totalItems: 2,
-        complete: true,
-        created: false,
-      });
-      expect(await fixture.transcript()).toEqual(first);
-      fixture.source.push({ type: "agentMessage", text: "A later preserved reply" });
-      expect(await fixture.call()).toHaveBeenCalledWith(true, {
-        sessionKey: fixture.key,
-        importedItems: 1,
-        totalItems: 3,
-        complete: true,
-        created: false,
-      });
-      expect(await fixture.transcript()).toHaveLength(4);
-      const entry = loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key });
-      expect(entry?.displayName).toBe("Preserved investigation");
-      for (const binding of [
-        "pluginOwnerId",
-        "modelSelectionLocked",
-        "cliSessionBindings",
-        "execNode",
-      ]) {
-        expect(entry).not.toHaveProperty(binding);
-      }
-      expect(fixture.list).not.toHaveBeenCalled();
-      expect(fixture.read).not.toHaveBeenCalledWith(
-        expect.objectContaining({ displayName: expect.anything() }),
-      );
-      expect(readSessionUpstreamLink(fixture.key, "main")).toBeUndefined();
-      expect(
-        listSessionStateEventsSince(fixture.key, "main", 0).events.filter(
-          (event) => event.kind === "imported",
-        ),
-      ).toMatchObject([
-        {
-          kind: "imported",
-          payload: {
-            catalogId: "claude",
-            hostId: "node:fixture",
-            threadId: fixture.locator.threadId,
-            sourceHomeId: "home-a",
-          },
-        },
-      ]);
-      await fixture.seedNative();
-      const continueSession = vi.fn(async () => ({ sessionKey: fixture.nativeKey }));
-      fixture.provider.continueSession = continueSession;
-      expect(await fixture.call("sessions.catalog.continue")).toHaveBeenCalledWith(true, {
-        sessionKey: fixture.nativeKey,
-      });
-      expect(continueSession).toHaveBeenCalledOnce();
-      expect(fixture.nativeKey).not.toBe(fixture.key);
-      expect(await fixture.transcript()).toHaveLength(4);
-    });
-  });
-
-  it.each([undefined, "   "])(
-    "uses a generic title instead of the host label when displayName is %j",
-    async (displayName) => {
-      await withCatalog(async (fixture) => {
-        fixture.locator.displayName = displayName;
-        expect(await fixture.call()).toHaveBeenCalledWith(
-          true,
-          expect.objectContaining({ created: true, importedItems: 2 }),
-        );
-        expect(
-          loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key })?.displayName,
-        ).toBe("Imported Claude session");
-      });
-    },
-  );
-
-  it("appends to a pre-existing import target while its ordinary projection publications advance", async () => {
-    await withCatalog(async (fixture) => {
-      await fixture.precreate();
-
-      expect(await fixture.call()).toHaveBeenCalledWith(true, {
-        sessionKey: fixture.key,
-        importedItems: 2,
-        totalItems: 2,
-        complete: true,
-        created: false,
-      });
-      expect(await fixture.transcript()).toHaveLength(3);
-    });
-  });
-
-  it.each(["owner", "other"] as const)(
-    "respects existing-target write access in a restricted multi-user Gateway (%s target)",
-    async (targetOwner) => {
-      await withCatalog(async (fixture) => {
-        await fixture.precreate(targetOwner === "owner" ? fixture.client : fixture.other!);
-        const response = await fixture.call();
-        if (targetOwner === "owner") {
-          expect(response).toHaveBeenCalledWith(true, {
-            sessionKey: fixture.key,
-            importedItems: 2,
-            totalItems: 2,
-            complete: true,
-            created: false,
-          });
-          expect(await fixture.transcript()).toHaveLength(3);
-        } else {
-          expect(response).toHaveBeenCalledWith(
-            false,
-            undefined,
-            expect.objectContaining({
-              message: "session is shared for this connection",
-            }),
-          );
-          expect(await fixture.transcript()).toEqual([]);
-        }
-      }, true);
-    },
-  );
-
-  it("forbids a restricted caller who cannot read the source without creating a session", async () => {
-    await withCatalog(async (fixture) => {
-      await upsertSessionEntryCore(
-        { agentId: "main", sessionKey: fixture.nativeKey },
-        { visibility: "draft" },
-      );
-      expect(await fixture.call("sessions.catalog.import", fixture.other)).toHaveBeenCalledWith(
-        false,
-        undefined,
-        expect.objectContaining({ code: "FORBIDDEN" }),
-      );
-      expect(fixture.read).not.toHaveBeenCalled();
-      expect(
-        loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key }),
-      ).toBeUndefined();
-      expect(await fixture.transcript()).toEqual([]);
-    }, true);
-  });
-
-  it("rejects source sharing revocation after history read before creating the destination", async () => {
-    await withCatalog(async (fixture) => {
-      const createGatewaySession = sessionCreation.createGatewaySession;
-      const create = vi
-        .spyOn(sessionCreation, "createGatewaySession")
-        .mockImplementationOnce(async (params) => {
-          expect(fixture.read).toHaveBeenCalledOnce();
-          await upsertSessionEntryCore(
-            { agentId: "main", sessionKey: fixture.nativeKey },
-            {
-              visibility: "draft",
-              createdActor: {
-                type: "human",
-                source: "profile",
-                id: fixture.other.authenticatedUserProfile!.profileId,
-              },
-            },
-          );
-          await fixture.projection.ensureMaterialized();
-          await fixture.projection.prepareMembership();
-          return createGatewaySession(params);
-        });
-      const response = await fixture.call();
-      expect(create).toHaveBeenCalledOnce();
-      expect(response).toHaveBeenCalledWith(
-        false,
-        undefined,
-        expect.objectContaining({ message: expect.stringContaining("source visibility changed") }),
-      );
-      expect(
-        loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key }),
-      ).toBeUndefined();
-      expect(await fixture.transcript()).toEqual([]);
-    }, true);
-  });
-
-  it("rejects remaining re-import appends when source visibility is revoked mid-append", async () => {
-    await withCatalog(async (fixture) => {
-      await upsertSessionEntryCore(
-        { agentId: "main", sessionKey: fixture.nativeKey },
-        {
-          createdActor: {
-            type: "human",
-            source: "profile",
-            id: fixture.other.authenticatedUserProfile!.profileId,
-          },
-        },
-      );
-      expect(await fixture.call()).toHaveBeenCalledWith(
-        true,
-        expect.objectContaining({ importedItems: 2 }),
-      );
-      fixture.source.push(
-        { id: "later-1", type: "agentMessage", text: "First later reply" },
-        { id: "later-2", type: "agentMessage", text: "Revoked later reply" },
-      );
-      let revoked = false;
-      const withWriteLock = transcriptRuntime.withSessionTranscriptWriteLock;
-      vi.spyOn(transcriptRuntime, "withSessionTranscriptWriteLock").mockImplementation(
-        (params, run) =>
-          withWriteLock(params, (transcript) =>
-            run({
-              ...transcript,
-              appendMessage: async (options) => {
-                const result = await transcript.appendMessage(options);
-                if (
-                  result?.appended &&
-                  JSON.stringify(options.message).includes("First later reply")
-                ) {
-                  fixture.config.gateway!.roles!.definitions!.reader!.sessions.others = "none";
-                  revoked = true;
-                }
-                return result;
-              },
-            }),
-          ),
-      );
-      const response = await fixture.call();
-      expect(revoked).toBe(true);
-      expect(response).toHaveBeenCalledWith(
-        false,
-        undefined,
-        expect.objectContaining({ message: expect.stringContaining("source visibility changed") }),
-      );
-      const transcript = await fixture.transcript();
-      expect(transcript).toHaveLength(4);
-      expect(JSON.stringify(transcript)).toContain("First later reply");
-      expect(JSON.stringify(transcript)).not.toContain("Revoked later reply");
-    }, true);
+    await expect(fixture().run()).rejects.toBe(failure);
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 });

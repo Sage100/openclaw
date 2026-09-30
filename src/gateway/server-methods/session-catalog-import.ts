@@ -14,7 +14,10 @@ import { recordSessionStateEventAsync } from "../../sessions/session-state-event
 import { buildSessionCatalogImportKey } from "../session-create-key.js";
 import { createGatewaySession } from "../session-create-service.js";
 import { getSessionRowProjection } from "../session-row-projection-access.js";
-import { hasSessionReadAccessChanged } from "../session-sharing-policy.js";
+import {
+  hasSessionReadAccessChanged,
+  isSessionVisibilityAllowed,
+} from "../session-sharing-policy.js";
 import { readProjectedSessionMutationTarget } from "../session-sharing-target-read.js";
 import { resolveSessionMutationAuthorization } from "../session-sharing.js";
 import { readAuthorizedSessionCatalog } from "./session-catalog-read.js";
@@ -121,6 +124,7 @@ export async function importAuthorizedSessionCatalog(params: {
     cfg,
     agentId,
     key,
+    ...(isSessionVisibilityAllowed(cfg, "draft") ? { defaultVisibility: "draft" as const } : {}),
     displayName:
       displayName?.trim() || `Imported ${truncateUtf16Safe(provider.label, 100)} session`,
     ...(client?.connect ? { requestingOperatorScopes: client.connect.scopes ?? [] } : {}),

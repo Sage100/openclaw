@@ -130,7 +130,11 @@ the destination agent. Imports support Gateway-local, paired-node, macOS app,
 and Linux app sources that the caller may read.
 
 Import creates an ordinary OpenClaw session containing untrusted reference
-material. It preserves the catalog's projected messages independently of native
+material. Imported copies start as [drafts](/concepts/multi-user#drafts), visible
+only to their creator and Gateway admins. Publish the copy through the session
+sharing controls to share it; re-importing preserves its current visibility.
+When drafts are disabled, imported copies follow the Gateway's default visibility.
+It preserves the catalog's projected messages independently of native
 tool cleanup; it does not resume the native session or bind the copy to its
 model or machine. Repeating the same import reuses the copy and appends only new
 items. Each import reads up to 50,000 items and 64 MiB, keeping the newest history
