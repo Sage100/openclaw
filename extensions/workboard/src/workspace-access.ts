@@ -70,7 +70,7 @@ export const WORKBOARD_CARD_TOOL_NAMES = [
   "workboard_move",
 ] as const;
 
-export const WORKBOARD_TOOL_NAMES = [
+const WORKBOARD_TOOL_NAMES = [
   ...WORKBOARD_CARD_TOOL_NAMES,
   ...WORKBOARD_SESSIONS_BOARD_TOOL_NAMES,
 ] as const;
