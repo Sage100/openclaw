@@ -1,50 +1,57 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   SessionCatalogTranscriptItem,
   SessionsCatalogImportParams,
 } from "../../../packages/gateway-protocol/src/index.js";
-import { setRuntimeConfigSnapshot } from "../../config/config.js";
+import { setRuntimeConfigSnapshot } from "../../config/runtime-snapshot.js";
 import {
   loadSessionEntryReadOnly,
   upsertSessionEntryCore,
-} from "../../config/sessions/session-accessor.js";
+} from "../../config/sessions/session-accessor.sqlite-entry.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { readVisibleSessionTranscriptMessageEntries } from "../../plugin-sdk/session-transcript-runtime.js";
+import * as transcriptRuntime from "../../plugin-sdk/session-transcript-runtime.js";
 import { createEmptyPluginRegistry } from "../../plugins/registry-empty.js";
 import { getActivePluginRegistry, setActivePluginRegistry } from "../../plugins/runtime.js";
 import { withPluginRuntimeGatewayRequestScope } from "../../plugins/runtime/gateway-request-scope.js";
 import type { SessionCatalogProvider } from "../../plugins/session-catalog.js";
 import { listSessionStateEventsSince } from "../../sessions/session-state-events.js";
 import { readSessionUpstreamLink } from "../../sessions/session-upstream-links.js";
-import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
-import {
-  createContext,
-  createOperatorClient,
-} from "../server-plugin-in-process-dispatch.test-support.js";
+import { ensureProfileForEmail } from "../../state/user-profiles.js";
+import { createOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { buildSessionCatalogImportKey } from "../session-create-key.js";
-import { createGatewaySession } from "../session-create-service.js";
+import * as sessionCreation from "../session-create-service.js";
 import { bindSessionRowProjection } from "../session-row-projection-access.js";
 import { createSessionRowProjection } from "../session-row-projection.js";
 import { sessionCatalogHandlers } from "./session-catalog.js";
+import {
+  createSessionMutationTestClient,
+  createSessionMutationTestContext,
+} from "./sessions-mutations.owner.test-support.js";
 import type { GatewayClient, RespondFn } from "./types.js";
+
+let state: Awaited<ReturnType<typeof createOpenClawTestState>>;
+let nextCatalog = 0;
+beforeAll(async () => {
+  state = await createOpenClawTestState({ scenario: "minimal", label: "catalog-import" });
+});
+beforeEach(() => state.applyEnv());
+afterAll(async () => state.cleanup());
 
 async function withCatalog(
   run: (fixture: Awaited<ReturnType<typeof createCatalog>>) => Promise<void>,
   restricted = false,
 ) {
-  await withOpenClawTestState({ scenario: "minimal", label: "catalog-import" }, async (state) => {
-    const previousRegistry = getActivePluginRegistry() ?? createEmptyPluginRegistry();
-    let fixture: Awaited<ReturnType<typeof createCatalog>> | undefined;
-    try {
-      fixture = await createCatalog(restricted);
-      await state.writeConfig(fixture.config);
-      setRuntimeConfigSnapshot(fixture.config);
-      await run(fixture);
-    } finally {
-      fixture?.projection.dispose();
-      setActivePluginRegistry(previousRegistry);
-    }
-  });
+  const previousRegistry = getActivePluginRegistry() ?? createEmptyPluginRegistry();
+  const fixture = await createCatalog(restricted);
+  try {
+    await state.writeConfig(fixture.config);
+    setRuntimeConfigSnapshot(fixture.config);
+    await run(fixture);
+  } finally {
+    vi.restoreAllMocks();
+    fixture.projection.dispose();
+    setActivePluginRegistry(previousRegistry);
+  }
 }
 
 async function createCatalog(restricted: boolean) {
@@ -67,17 +74,15 @@ async function createCatalog(restricted: boolean) {
         }
       : {}),
   };
-  const client = createOperatorClient({
-    profileName: "catalog-import",
-    scopes: restricted ? ["operator.read", "operator.write"] : ["operator.admin"],
-  });
-  const other = restricted
-    ? createOperatorClient({
-        profileName: "other-importer",
-        scopes: ["operator.read", "operator.write"],
-      })
-    : undefined;
-  const nativeKey = "agent:main:native-adopted";
+  const id = ++nextCatalog;
+  const client = createSessionMutationTestClient(
+    ensureProfileForEmail("catalog-import@example.test").id,
+  );
+  client.connect.scopes = restricted ? ["operator.read", "operator.write"] : ["operator.admin"];
+  const other = createSessionMutationTestClient(
+    ensureProfileForEmail("other-importer@example.test").id,
+  );
+  const nativeKey = `agent:main:native-adopted-${id}`;
   const seedNative = () =>
     upsertSessionEntryCore(
       { agentId: "main", sessionKey: nativeKey },
@@ -126,7 +131,7 @@ async function createCatalog(restricted: boolean) {
         connected: true,
         sessions: [
           {
-            threadId: "thread",
+            threadId: `thread-${id}`,
             sourceHomeId: "home-a",
             sessionKey: nativeKey,
             name: "Native source",
@@ -146,7 +151,8 @@ async function createCatalog(restricted: boolean) {
   const projection = await createSessionRowProjection({ cfg: config, getConfig: () => config });
   const context = bindSessionRowProjection(
     {
-      ...createContext(),
+      ...createSessionMutationTestContext(config),
+      logGateway: { error: vi.fn(), warn: vi.fn() },
       getRuntimeConfig: () => config,
       loadGatewayModelCatalogSnapshot: async () => ({ entries: [], routeVariants: [] }),
     },
@@ -156,7 +162,7 @@ async function createCatalog(restricted: boolean) {
     catalogId: "claude",
     hostId: "node:fixture",
     sourceHomeId: "home-a",
-    threadId: "thread",
+    threadId: `thread-${id}`,
     agentId: "main",
     displayName: "  Preserved investigation  ",
   };
@@ -182,7 +188,7 @@ async function createCatalog(restricted: boolean) {
   const transcript = async () => {
     const entry = loadSessionEntryReadOnly({ agentId: "main", sessionKey: key });
     return entry
-      ? readVisibleSessionTranscriptMessageEntries({
+      ? transcriptRuntime.readVisibleSessionTranscriptMessageEntries({
           agentId: "main",
           sessionKey: key,
           sessionId: entry.sessionId,
@@ -190,7 +196,7 @@ async function createCatalog(restricted: boolean) {
       : [];
   };
   const precreate = async (owner = client) => {
-    const created = await createGatewaySession({
+    const created = await sessionCreation.createGatewaySession({
       cfg: config,
       agentId: "main",
       key,
@@ -288,7 +294,7 @@ describe("sessions.catalog.import with durable Gateway owners", () => {
           payload: {
             catalogId: "claude",
             hostId: "node:fixture",
-            threadId: "thread",
+            threadId: fixture.locator.threadId,
             sourceHomeId: "home-a",
           },
         },
@@ -364,4 +370,114 @@ describe("sessions.catalog.import with durable Gateway owners", () => {
       }, true);
     },
   );
+
+  it("forbids a restricted caller who cannot read the source without creating a session", async () => {
+    await withCatalog(async (fixture) => {
+      await upsertSessionEntryCore(
+        { agentId: "main", sessionKey: fixture.nativeKey },
+        { visibility: "draft" },
+      );
+      expect(await fixture.call("sessions.catalog.import", fixture.other)).toHaveBeenCalledWith(
+        false,
+        undefined,
+        expect.objectContaining({ code: "FORBIDDEN" }),
+      );
+      expect(fixture.read).not.toHaveBeenCalled();
+      expect(
+        loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key }),
+      ).toBeUndefined();
+      expect(await fixture.transcript()).toEqual([]);
+    }, true);
+  });
+
+  it("rejects source sharing revocation after history read before creating the destination", async () => {
+    await withCatalog(async (fixture) => {
+      const createGatewaySession = sessionCreation.createGatewaySession;
+      const create = vi
+        .spyOn(sessionCreation, "createGatewaySession")
+        .mockImplementationOnce(async (params) => {
+          expect(fixture.read).toHaveBeenCalledOnce();
+          await upsertSessionEntryCore(
+            { agentId: "main", sessionKey: fixture.nativeKey },
+            {
+              visibility: "draft",
+              createdActor: {
+                type: "human",
+                source: "profile",
+                id: fixture.other.authenticatedUserProfile!.profileId,
+              },
+            },
+          );
+          await fixture.projection.ensureMaterialized();
+          await fixture.projection.prepareMembership();
+          return createGatewaySession(params);
+        });
+      const response = await fixture.call();
+      expect(create).toHaveBeenCalledOnce();
+      expect(response).toHaveBeenCalledWith(
+        false,
+        undefined,
+        expect.objectContaining({ message: expect.stringContaining("source visibility changed") }),
+      );
+      expect(
+        loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key }),
+      ).toBeUndefined();
+      expect(await fixture.transcript()).toEqual([]);
+    }, true);
+  });
+
+  it("rejects remaining re-import appends when source visibility is revoked mid-append", async () => {
+    await withCatalog(async (fixture) => {
+      await upsertSessionEntryCore(
+        { agentId: "main", sessionKey: fixture.nativeKey },
+        {
+          createdActor: {
+            type: "human",
+            source: "profile",
+            id: fixture.other.authenticatedUserProfile!.profileId,
+          },
+        },
+      );
+      expect(await fixture.call()).toHaveBeenCalledWith(
+        true,
+        expect.objectContaining({ importedItems: 2 }),
+      );
+      fixture.source.push(
+        { id: "later-1", type: "agentMessage", text: "First later reply" },
+        { id: "later-2", type: "agentMessage", text: "Revoked later reply" },
+      );
+      let revoked = false;
+      const withWriteLock = transcriptRuntime.withSessionTranscriptWriteLock;
+      vi.spyOn(transcriptRuntime, "withSessionTranscriptWriteLock").mockImplementation(
+        (params, run) =>
+          withWriteLock(params, (transcript) =>
+            run({
+              ...transcript,
+              appendMessage: async (options) => {
+                const result = await transcript.appendMessage(options);
+                if (
+                  result?.appended &&
+                  JSON.stringify(options.message).includes("First later reply")
+                ) {
+                  fixture.config.gateway!.roles!.definitions!.reader!.sessions.others = "none";
+                  revoked = true;
+                }
+                return result;
+              },
+            }),
+          ),
+      );
+      const response = await fixture.call();
+      expect(revoked).toBe(true);
+      expect(response).toHaveBeenCalledWith(
+        false,
+        undefined,
+        expect.objectContaining({ message: expect.stringContaining("source visibility changed") }),
+      );
+      const transcript = await fixture.transcript();
+      expect(transcript).toHaveLength(4);
+      expect(JSON.stringify(transcript)).toContain("First later reply");
+      expect(JSON.stringify(transcript)).not.toContain("Revoked later reply");
+    }, true);
+  });
 });

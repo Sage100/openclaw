@@ -77,7 +77,9 @@ continuation seed remains limited to 200 items and 512 KiB.
 
 Import requires `operator.write` and the same row visibility as reading a
 catalog transcript. In multi-user mode, non-admin callers can import only rows
-they may read. Importing a copy does not adopt the native session or change what
+they may read. Source read access is checked through each destination write;
+revocation stops further copying, while content already committed remains in the
+imported session. Importing a copy does not adopt the native session or change what
 clicking its catalog row opens.
 
 ## Codex sessions and transcripts

@@ -13,8 +13,16 @@ import type { SessionCatalogProvider } from "../../plugins/session-catalog.js";
 import { recordSessionStateEventAsync } from "../../sessions/session-state-events.js";
 import { buildSessionCatalogImportKey } from "../session-create-key.js";
 import { createGatewaySession } from "../session-create-service.js";
+import { getSessionRowProjection } from "../session-row-projection-access.js";
+import { hasSessionReadAccessChanged } from "../session-sharing-policy.js";
+import { readProjectedSessionMutationTarget } from "../session-sharing-target-read.js";
 import { resolveSessionMutationAuthorization } from "../session-sharing.js";
 import { readAuthorizedSessionCatalog } from "./session-catalog-read.js";
+import {
+  isPublishedCatalogVisible,
+  resolveSessionCatalogVisibility,
+  type SessionCatalogThreadVisibility,
+} from "./session-catalog-visibility.js";
 import { resolveOperatorSessionCreation } from "./session-creation-provenance.js";
 import { withSessionMutationCommitGuard } from "./session-mutation-guards.js";
 import type { GatewayClient, GatewayRequestContext } from "./types.js";
@@ -26,7 +34,7 @@ export async function importAuthorizedSessionCatalog(params: {
   allowProcessHomeFallback: boolean;
   client: GatewayClient | null;
   context: GatewayRequestContext;
-  reauthorize: () => Promise<boolean>;
+  reauthorize: () => Promise<SessionCatalogThreadVisibility | null>;
   commitGuard?: () => void;
 }): Promise<
   { ok: true; result: SessionsCatalogImportResult } | { ok: false; error: ErrorShape } | null
@@ -47,10 +55,48 @@ export async function importAuthorizedSessionCatalog(params: {
       return result.page;
     },
   });
-  if (!(await params.reauthorize())) {
+  const source = await params.reauthorize();
+  if (!source) {
     return null;
   }
   const cfg = context.getRuntimeConfig();
+  const visibility = resolveSessionCatalogVisibility(client, cfg);
+  const projection = getSessionRowProjection(context);
+  const sourceRef = source.source && { sessionKey: source.source.sessionKey };
+  const sourceState =
+    sourceRef && projection
+      ? readProjectedSessionMutationTarget(sourceRef, cfg, projection)
+      : undefined;
+  const assertSourceCurrent = () => {
+    params.commitGuard?.();
+    const currentConfig = context.getRuntimeConfig();
+    const currentVisibility = resolveSessionCatalogVisibility(client, currentConfig);
+    if (
+      visibility.cacheKey !== source.visibility.cacheKey ||
+      currentVisibility.cacheKey !== visibility.cacheKey ||
+      (provider.audience === "session-viewers" && !isPublishedCatalogVisible(currentVisibility))
+    ) {
+      throw new Error("Session catalog source visibility changed; retry the import");
+    }
+    if (sourceRef) {
+      const current =
+        projection && getSessionRowProjection(context) === projection
+          ? readProjectedSessionMutationTarget(sourceRef, currentConfig, projection)
+          : undefined;
+      // Access facts survive ordinary appends; identity, privacy and store changes do not.
+      if (
+        sourceState?.status !== "ready" ||
+        current?.status !== "ready" ||
+        sourceState.target.agentId !== current.target.agentId ||
+        sourceState.target.canonicalKey !== current.target.canonicalKey ||
+        sourceState.target.storePath !== current.target.storePath ||
+        hasSessionReadAccessChanged(source.source?.entry, sourceState.target.entry) ||
+        hasSessionReadAccessChanged(sourceState.target.entry, current.target.entry)
+      ) {
+        throw new Error("Session catalog source visibility changed; retry the import");
+      }
+    }
+  };
   const key = buildSessionCatalogImportKey(agentId, locator);
   // Import creates or reuses an ordinary keyed session, sharing sessions.create's
   // durable target authorization and creation-commit handoff.
@@ -65,7 +111,7 @@ export async function importAuthorizedSessionCatalog(params: {
   }
   const authorization = withSessionMutationCommitGuard(
     destination.authorization,
-    params.commitGuard,
+    assertSourceCurrent,
     undefined,
   );
   const commitGuard = authorization?.assertCurrent;

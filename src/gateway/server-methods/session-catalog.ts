@@ -215,7 +215,7 @@ export const sessionCatalogHandlers: GatewayRequestHandlers = {
           reauthorize: async () => {
             const current = await authorize();
             if (!current) {
-              return false;
+              return null;
             }
             if (
               current.agentId !== authorization.agentId ||
@@ -223,7 +223,7 @@ export const sessionCatalogHandlers: GatewayRequestHandlers = {
             ) {
               throw new Error("Session catalog source ownership changed; retry the import");
             }
-            return true;
+            return current.sourceVisibility;
           },
           commitGuard: sessionMutationCommitGuard,
         });

@@ -14,7 +14,7 @@ import { type RuntimeEnv, writeRuntimeJson } from "../runtime.js";
 import { ExpectedCliError, formatCliJsonFailure } from "./failure-output.js";
 import { callSessionTargetGateway, type SessionTargetGateway } from "./session-target.js";
 
-type SessionsImportOptions = SessionTargetGateway & {
+export type SessionsImportOptions = SessionTargetGateway & {
   catalogId?: string;
   threadId?: string;
   all?: boolean;
@@ -156,9 +156,10 @@ export async function sessionsImportCommand(
   const importHost = async (
     id: string,
     initialHost: SessionCatalogHost,
-    catalogHasError: boolean,
+    initialCatalogHasError: boolean,
   ) => {
     let host = initialHost;
+    let catalogHasError = initialCatalogHasError;
     const cursors = new Set<string>();
     try {
       while (!limitReached()) {
