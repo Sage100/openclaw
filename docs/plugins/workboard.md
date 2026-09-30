@@ -145,7 +145,9 @@ columns, instructions, scope, or placements using these tools:
 | `workboard_sessions_board_update` | Optional `boardId`, plus `columns`, `instructions`, or `scope`. `columns` replaces the complete ordered list; retain ids when renaming labels. |
 | `workboard_sessions_board_move`   | Optional `boardId`, required `sessionKey` and `columnId`; pins that session's placement.                                                       |
 
-Omit `boardId` only when exactly one Sessions board exists. The dock attaches page
+These three tools are available to every agent once the plugin is enabled; unlike
+the card tools they need no `tools.allow` entry, so the Board agent works out of
+the box. Omit `boardId` only when exactly one Sessions board exists. The dock attaches page
 context to the conversation, but plugin tools do not receive that context as a
 structured argument. With several Sessions boards, the agent must pass the board
 id from that context or from `workboard_boards`.

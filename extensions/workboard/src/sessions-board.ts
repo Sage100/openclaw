@@ -128,7 +128,9 @@ async function listSessions(gateway: Gateway, board: WorkboardSessionsBoard) {
 
 function inScope(facts: WorkboardSessionFacts, board: WorkboardSessionsBoard, now: number) {
   const scope = board.sessions.scope;
+  // The board's own agent conversation edits the board; it is not work to place on it.
   return (
+    facts.key !== board.sessions.agentSessionKey &&
     (!scope?.agentIds?.length || scope.agentIds.includes(facts.agentId)) &&
     (scope?.includeArchived === true || !facts.archived) &&
     facts.lastActivityAt >= now - (scope?.maxAgeHours ?? 72) * 3_600_000

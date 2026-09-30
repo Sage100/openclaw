@@ -165,15 +165,6 @@
     "workboard_board_delete": {
       "optional": true
     },
-    "workboard_sessions_board_read": {
-      "optional": true
-    },
-    "workboard_sessions_board_update": {
-      "optional": true
-    },
-    "workboard_sessions_board_move": {
-      "optional": true
-    },
     "workboard_stats": {
       "optional": true
     },

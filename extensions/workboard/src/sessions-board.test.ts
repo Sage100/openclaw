@@ -295,6 +295,26 @@ describe("Sessions board classification service", () => {
     );
   });
 
+  it("keeps the board's own agent conversation off the board", async () => {
+    const own = facts("board-agent");
+    await withService(
+      { facts: [own, facts("one")], spec: { agentSessionKey: own.key } },
+      async ({ service, store, complete }) => {
+        await service.sweep();
+        expect(
+          (await store.listSessionPlacements(BOARD_ID)).map((entry) => entry.sessionKey),
+        ).toEqual([facts("one").key]);
+        expect(complete).toHaveBeenCalledOnce();
+        expect((await service.read(BOARD_ID)).sessions.map((session) => session.key)).toEqual([
+          facts("one").key,
+        ]);
+        await expect(service.move(BOARD_ID, own.key, "other")).rejects.toThrow(
+          "not available in this board's scope",
+        );
+      },
+    );
+  });
+
   it("accepts utility-model JSON wrapped in a markdown code fence", async () => {
     await withService(
       {
