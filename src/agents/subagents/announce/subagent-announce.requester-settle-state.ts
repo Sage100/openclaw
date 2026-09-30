@@ -96,3 +96,37 @@ export function captureRequesterRunOwner(requesterRun: SubagentRunRecord | null 
     return true;
   };
 }
+
+/**
+ * A yield hands continuation back to the requester, so its own final may reach the
+ * conversation under its normal reply rules; private findings stay wake input. The
+ * policy is frozen at first admission: a batch already attempted without the marker
+ * was admitted as a private turn (possibly by an earlier build), and retrying it
+ * under a different policy could republish that input.
+ */
+export function resolvePrivateSettlePolicy(
+  completionRows: readonly SubagentRunRecord[],
+  requesterYielded: boolean,
+  state: RequesterSettleWakeBatchState,
+  requesterSessionId: string,
+) {
+  // One private result makes the aggregate private; public siblings keep their own route.
+  const privateRows = completionRows.filter((entry) => entry.completionTarget === "parent");
+  const hasPrivateRows = privateRows.length > 0;
+  const yieldedFinalDeliverable =
+    hasPrivateRows &&
+    requesterYielded &&
+    (state.yieldedFinalDeliverable === true ||
+      (state.status === "pending" && state.attemptCount === 0));
+  const parentOnly = hasPrivateRows && !yieldedFinalDeliverable;
+  // Private findings stay bound to the requester incarnation that produced them.
+  const privateBinding = {
+    ...(parentOnly ? { completionTarget: "parent" as const } : {}),
+    ...(hasPrivateRows ? { completionRequesterSessionId: requesterSessionId } : {}),
+  };
+  const admissionMarker = yieldedFinalDeliverable ? { yieldedFinalDeliverable: true as const } : {};
+  // A yield owes the conversation a visible final unless private findings let the
+  // requester choose silence.
+  const requireVisibleReply = requesterYielded && !hasPrivateRows;
+  return { privateRows, requireVisibleReply, parentOnly, privateBinding, admissionMarker };
+}

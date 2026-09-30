@@ -65,6 +65,7 @@ import {
   readSharedBatchState,
   isRequesterWakeStateCurrent,
   captureRequesterRunOwner,
+  resolvePrivateSettlePolicy,
   retainedYieldIdentity,
   type RequesterSettleWakeBatchState,
   type RequesterSettleWakeBatchCallbacks,
@@ -411,20 +412,13 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
   const completionRows = currentCompletionRows(settledBatch);
   // Delivered children remain in yield cohorts. One private result makes the
   // aggregate private; public siblings keep their individual completion route.
-  // A yield hands continuation back to the requester, so its own final must be
-  // deliverable. Private findings stay wake input and remain session-bound; the
-  // requester may still reply NO_REPLY when nothing is owed.
-  const privateRows = completionRows.filter((entry) => entry.completionTarget === "parent");
-  const hasPrivateRows = privateRows.length > 0;
-  // Policy is chosen once, at first admission, and persisted. A batch already
-  // attempted without the marker was admitted as a private turn (possibly by an
-  // earlier build); retrying it under a different policy could republish that input.
-  const yieldedFinalDeliverable =
-    hasPrivateRows &&
-    requesterYieldedAfterDelivery &&
-    (selectedState.yieldedFinalDeliverable === true ||
-      (selectedState.status === "pending" && selectedState.attemptCount === 0));
-  const parentOnly = hasPrivateRows && !yieldedFinalDeliverable;
+  const { privateRows, requireVisibleReply, parentOnly, privateBinding, admissionMarker } =
+    resolvePrivateSettlePolicy(
+      completionRows,
+      requesterYieldedAfterDelivery,
+      selectedState,
+      requesterEntry.sessionId,
+    );
   // `/new` keeps the session id but rotates the lifecycle revision, so compare the
   // whole incarnation; a deliverable retry must not post old findings into a reset session.
   if (privateRows.some((entry) => !matchesSubagentRequesterSession(entry, requesterIdentity))) {
@@ -452,9 +446,9 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
   const completionChannel = normalizeMessageChannel(directOrigin?.channel);
   const wakeMessage = buildRequesterSettleWakeMessage({
     findings: preparedFindings.text,
-    requireVisibleReply: requesterYieldedAfterDelivery && !hasPrivateRows,
+    requireVisibleReply,
     parentOnly,
-    yieldedFinalDeliverable,
+    yieldedFinalDeliverable: admissionMarker.yieldedFinalDeliverable,
     children: completionRows,
     recoveryChildren: recoveryRows,
     preserveModelRouteNotice: !completionChannel || !isDeliverableMessageChannel(completionChannel),
@@ -523,7 +517,7 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
         attemptCount: state.attemptCount + 1,
         batchRunIds: retainedBatchRunIds,
         ...retainedYieldIdentity(state),
-        ...(yieldedFinalDeliverable ? { yieldedFinalDeliverable: true as const } : {}),
+        ...admissionMarker,
       };
       await params.transitionBatch(settledBatch, state);
     }
@@ -644,13 +638,8 @@ export async function maybeWakeRequesterAfterAllChildrenSettled(
                 requesterIsSubagent: requesterDepth >= 1,
                 expectsCompletionMessage: false,
                 requireDirectDelivery: true,
-                ...(parentOnly ? { completionTarget: "parent" } : {}),
-                ...(hasPrivateRows
-                  ? { completionRequesterSessionId: requesterEntry.sessionId }
-                  : {}),
-                ...(!pauseNotice && requesterYieldedAfterDelivery && !hasPrivateRows
-                  ? { requireVisibleReply: true }
-                  : {}),
+                ...privateBinding,
+                ...(!pauseNotice && requireVisibleReply ? { requireVisibleReply } : {}),
                 directIdempotencyKey,
                 signal: params.signal,
                 resolveGatewayContext,
