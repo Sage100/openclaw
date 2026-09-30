@@ -13,13 +13,23 @@ extension GatewayProcessManager {
         let allowUnconfigured: Bool
         let generation: UInt64
         let runtimeForUpdate: BundledRuntime?
+        let runtimeEnvironment: [String: String]?
+        let nodeMigration: ManagedNodeGatewayMigration.Candidate?
+        let serviceForRestoration: GatewayLaunchAgentManager.InstalledServiceCLI?
+        let mutationCheck: (@MainActor @Sendable () async throws -> Void)?
         var invocationIDs: [UInt64]
 
         func hasSameConfiguration(as other: LaunchAgentEnableRequest) -> Bool {
             self.port == other.port &&
                 self.allowUnconfigured == other.allowUnconfigured &&
                 self.generation == other.generation &&
-                self.runtimeForUpdate?.root == other.runtimeForUpdate?.root
+                self.runtimeForUpdate?.root == other.runtimeForUpdate?.root &&
+                self.runtimeEnvironment == other.runtimeEnvironment &&
+                self.nodeMigration?.cli.prefix == other.nodeMigration?.cli.prefix &&
+                self.serviceForRestoration?.prefix == other.serviceForRestoration?.prefix &&
+                self.serviceForRestoration?.environment == other.serviceForRestoration?.environment &&
+                self.serviceForRestoration?.sqliteLibrary == other.serviceForRestoration?.sqliteLibrary &&
+                (self.mutationCheck == nil) == (other.mutationCheck == nil)
         }
     }
 

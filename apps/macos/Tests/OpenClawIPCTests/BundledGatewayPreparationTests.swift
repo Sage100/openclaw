@@ -133,7 +133,7 @@ struct BundledGatewayPreparationTests {
         }
     }
 
-    @Test(arguments: ["service", "policy", "retained-pin"])
+    @Test(arguments: ["service", "policy", "termination", "retained-pin"])
     func `bundled setup rechecks ownership after its progress callback`(_ change: String) async throws {
         let home = try makeTempDirForTests()
         defer { try? FileManager.default.removeItem(at: home) }
@@ -144,9 +144,12 @@ struct BundledGatewayPreparationTests {
             defer { fixture.remove() }
             let manager = GatewayProcessManager.shared
             let previousRetained = manager.retainedServiceCLI
+            let previousTerminating = manager.isTerminating
             defer {
                 manager.retainedServiceCLI = previousRetained
+                manager.isTerminating = previousTerminating
             }
+            manager.isTerminating = false
             manager.retainedServiceCLI = nil
             if change == "retained-pin" {
                 var retained = fixture.cli
@@ -166,6 +169,8 @@ struct BundledGatewayPreparationTests {
                             switch change {
                             case "service":
                                 try Data("operator replacement".utf8).write(to: fixture.plist)
+                            case "termination":
+                                manager.isTerminating = true
                             case "retained-pin":
                                 manager.retainedServiceCLI?.hadRuntimePin = true
                             default:
@@ -256,7 +261,7 @@ struct BundledGatewayPreparationTests {
             }
     }
 
-    @Test func `post update captures a paused legacy service and updates without resuming it`() async throws {
+    @Test func `paused post update retries unfinished core repair without resuming or migrating`() async throws {
         let home = try makeTempDirForTests()
         defer { try? FileManager.default.removeItem(at: home) }
         try await TestIsolation.withIsolatedState(launchAgentHomeDirectory: home, defaults: [
@@ -271,28 +276,134 @@ struct BundledGatewayPreparationTests {
             cli.environment["OPENCLAW_PREPARATION_FIXTURE_ROOT"] = fixture.root.path
             manager.retainedServiceCLI = cli
             try FileManager.default.removeItem(at: fixture.plist)
+            let failure = fixture.root.appendingPathComponent("fail")
+            try Data().write(to: failure)
+            try Data().write(to: fixture.root.appendingPathComponent("advance"))
+            await #expect(throws: GatewayHostingError.self) {
+                try await CLIInstaller.prepareBundledGateway(
+                    targetVersion: "2026.9.1", restartGateway: false, statusHandler: { _ in })
+            }
+            let pending = try #require(PostAppUpdateReceiptStore.pendingSetupRecovery())
+            #expect(!PostUpdateController.allowsNodeMigration(paused: true, canActivate: false, receipt: pending))
+            #expect(!PostUpdateController.allowsNodeMigration(paused: false, canActivate: true, receipt: pending))
             let context = try PostUpdateController.captureRuntimeContext(
                 connectionMode: .local, bundledApp: true, usesSeededGateway: false)
             #expect(context.hasService)
             #expect(context.ownsManagedRuntime)
             #expect(context.installedCLI?.prefix == cli.prefix)
             let resolution = await PostUpdateController.resolveGatewayAction(
-                context: context, gatewayUpdateIncomplete: false)
+                context: context, gatewayUpdateIncomplete: pending.gatewayUpdateIncomplete)
             {
                 await CLIInstaller.managedStatus(
                     expectedVersion: "2026.9.1", installedCLI: context.installedCLI, usesBundledRuntime: false)
             }
-            try #require(resolution.action == .update)
+            try #require(resolution.action == .repair)
+            let failedRepair = await CLIInstaller.updateManaged(
+                targetVersion: "2026.9.1",
+                restartGateway: false,
+                repair: true,
+                installedCLI: resolution.installedCLI,
+                statusHandler: { _ in })
+            guard case .failure = failedRepair else {
+                Issue.record("Failed core repair must remain retryable")
+                return
+            }
+            #expect(PostAppUpdateReceiptStore.pendingSetupRecovery() == pending)
+            #expect(!PostUpdateController.allowsNodeMigration(
+                paused: false, canActivate: true, receipt: PostAppUpdateReceiptStore.pendingSetupRecovery()))
+            try FileManager.default.removeItem(at: failure)
             let outcome = await CLIInstaller.updateManaged(
                 targetVersion: "2026.9.1",
                 restartGateway: false,
+                repair: true,
                 installedCLI: resolution.installedCLI,
                 statusHandler: { _ in })
             #expect(outcome == .success(fromVersion: "2026.8.1", toVersion: "2026.9.1"))
             #expect(!FileManager.default.fileExists(atPath: fixture.plist.path))
-            #expect(try String(contentsOf: fixture.root.appendingPathComponent("updates"), encoding: .utf8)
-                .contains("--no-restart"))
+            let updates = try String(contentsOf: fixture.root.appendingPathComponent("updates"), encoding: .utf8)
+                .split(separator: "\n")
+            #expect(updates.count == 3)
+            #expect(updates.allSatisfy { $0.contains("--no-restart") })
+            #expect(updates.dropFirst().allSatisfy { $0.contains("update repair") })
+            CLIInstaller.completeBundledSetup(
+                after: .deferred, currentVersion: "2026.9.1", mode: .local, paused: true)
+            #expect(PostAppUpdateReceiptStore.pendingSetupRecovery() == nil)
+            #expect(!PostUpdateController.allowsNodeMigration(paused: true, canActivate: false, receipt: nil))
             #expect(manager.retainedServiceCLI?.prefix == cli.prefix)
         }
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func `bundled setup joins the seeded service update owner before returning its package`(
+        retained: Bool,
+        updateFails: Bool) async throws
+    {
+        let home = try makeTempDirForTests()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try await TestIsolation.withIsolatedState(launchAgentHomeDirectory: home, defaults: [
+            cliInstallPolicyKey: "exact", GatewayLaunchAgentManager.resumeCommandKey: nil, postAppUpdateReceiptKey: nil,
+        ]) {
+            let state = AppProfile.current.stateDirectoryURL()
+            let runtime = BundledRuntime(root: state.appendingPathComponent("runtime/preparation-\(UUID().uuidString)"))
+            let current = state.appendingPathComponent("runtime/current")
+            defer {
+                try? FileManager.default.removeItem(at: runtime.root)
+                if !updateFails { try? FileManager.default.removeItem(at: current) }
+            }
+            let manager = GatewayProcessManager.shared
+            let previousTask = manager.bundledUpdateTask
+            let previousRetained = manager.retainedServiceCLI
+            let previousTerminating = manager.isTerminating
+            defer {
+                manager.bundledUpdateTask = previousTask
+                manager.retainedServiceCLI = previousRetained
+                manager.isTerminating = previousTerminating
+            }
+            manager.isTerminating = false
+            let old = BundledRuntime(root: state.appendingPathComponent("runtime/previous-build"))
+            var cli = GatewayLaunchAgentManager.InstalledServiceCLI(
+                prefix: [updateFails ? "/operator/bin/bun" : old.bun.path, old.cliCommand[1]],
+                sqliteLibrary: old.sqliteLibrary.path)
+            cli.hadRuntimePin = true
+            manager.retainedServiceCLI = retained ? cli : nil
+            if !retained {
+                let plist = GatewayLaunchAgentManager.plistURL(homeDirectory: home, profile: .current)
+                try FileManager.default.createDirectory(
+                    at: plist.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try PropertyListSerialization.data(
+                    fromPropertyList: ["ProgramArguments": cli.prefix + ["gateway"]],
+                    format: .xml,
+                    options: 0).write(to: plist)
+            }
+            let ownerWarning = "Gateway service uses an operator-pinned runtime; update it yourself"
+            manager.bundledUpdateTask = Task { @MainActor in
+                if updateFails { throw GatewayHostingError(message: ownerWarning) }
+                try self.publishRuntime(runtime, current: current)
+            }
+            do {
+                let location = try await CLIInstaller.prepareBundledGateway(statusHandler: { _ in })
+                #expect(!updateFails)
+                #expect(location == runtime.packageRoot.path)
+            } catch {
+                #expect(updateFails)
+                #expect(error.localizedDescription == ownerWarning)
+            }
+        }
+    }
+
+    private func publishRuntime(_ runtime: BundledRuntime, current: URL) throws {
+        for directory in [runtime.bun.deletingLastPathComponent(), runtime.packageRoot.appendingPathComponent("dist")] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: runtime.bun)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: runtime.bun.path)
+        try Data().write(to: runtime.sqliteLibrary)
+        try Data().write(to: runtime.packageRoot.appendingPathComponent("openclaw.mjs"))
+        try JSONSerialization.data(withJSONObject: [
+            "version": "2026.9.1", "commit": "fixture", "builtAt": "fixture", "buildId": runtime.root.lastPathComponent,
+        ]).write(to: runtime.packageRoot.appendingPathComponent("dist/build-info.json"))
+        try FileManager.default.createSymbolicLink(
+            atPath: current.path,
+            withDestinationPath: runtime.root.lastPathComponent)
     }
 }

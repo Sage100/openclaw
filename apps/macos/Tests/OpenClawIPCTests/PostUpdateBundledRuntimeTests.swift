@@ -250,8 +250,11 @@ struct PostUpdateBundledRuntimeTests {
         }
     }
 
-    @Test(arguments: [false, true])
-    func `remote primary keeps legacy node work separate from its local companion`(hasCompanion: Bool) async {
+    @Test(arguments: [false, true], [false, true])
+    func `remote primary keeps legacy node work separate from its local companion`(
+        hasCompanion: Bool,
+        companionVerified: Bool) async
+    {
         let cli = GatewayLaunchAgentManager.InstalledServiceCLI(
             prefix: ["/fixture/state/tools/node/bin/node", "/fixture/state/lib/node_modules/openclaw/dist/index.js"],
             sqliteLibrary: nil)
@@ -264,7 +267,8 @@ struct PostUpdateBundledRuntimeTests {
                     usesSeededGateway: hasCompanion,
                     hasService: true,
                     installedCLI: cli,
-                    ownsManagedRuntime: true),
+                    ownsManagedRuntime: true,
+                    localCompanionVerified: companionVerified),
                 gatewayUpdateIncomplete: incomplete)
             {
                 probes += 1
@@ -276,7 +280,7 @@ struct PostUpdateBundledRuntimeTests {
             #expect(resolution.action == (incomplete ? .repair : .update))
             #expect(resolution.installedCLI?.prefix == cli.prefix)
             #expect(resolution.needsManagedVerification)
-            #expect(resolution.prepareLocalCompanion == hasCompanion)
+            #expect(resolution.prepareLocalCompanion == (hasCompanion && !companionVerified))
         }
         var probedAbsentService = false
         let companionOnly = await PostUpdateController.resolveGatewayAction(
@@ -286,7 +290,8 @@ struct PostUpdateBundledRuntimeTests {
                 usesSeededGateway: hasCompanion,
                 hasService: false,
                 installedCLI: nil,
-                ownsManagedRuntime: false),
+                ownsManagedRuntime: false,
+                localCompanionVerified: companionVerified),
             gatewayUpdateIncomplete: true)
         {
             probedAbsentService = true
@@ -295,7 +300,7 @@ struct PostUpdateBundledRuntimeTests {
         #expect(!probedAbsentService)
         #expect(companionOnly.action == .none)
         #expect(!companionOnly.needsManagedVerification)
-        #expect(companionOnly.prepareLocalCompanion == hasCompanion)
+        #expect(companionOnly.prepareLocalCompanion == (hasCompanion && !companionVerified))
     }
 
     @Test func `bundled Gateway updates never select package registry work`() {
@@ -320,5 +325,65 @@ struct PostUpdateBundledRuntimeTests {
                     usesBundledRuntime: true) == (incomplete ? .ownershipFailure : .none))
             }
         }
+    }
+
+    @Test func `completed migration preserves notification receipts and synthetic launches remain silent`() {
+        let receipt = PostAppUpdateReceipt(
+            fromVersion: "2026.8.1",
+            toVersion: "2026.9.1",
+            recordedAt: .distantPast,
+            notificationAttempts: 1)
+        for verified in [false, true] {
+            #expect(PostUpdateController.notificationContinuation(
+                receipt: receipt,
+                runtimeVerified: verified,
+                migrationOnlyLaunchCheck: false) == .notify)
+        }
+        for inFlight in [false, true] {
+            let pendingRuntime = PostAppUpdateReceipt(
+                fromVersion: "2026.8.1",
+                toVersion: "2026.9.1",
+                recordedAt: .distantPast,
+                gatewayUpdateIncomplete: true,
+                notificationInFlight: inFlight)
+            #expect(PostUpdateController.notificationContinuation(
+                receipt: pendingRuntime,
+                runtimeVerified: false,
+                migrationOnlyLaunchCheck: false) == .waitForRuntime)
+            #expect(PostUpdateController.notificationContinuation(
+                receipt: pendingRuntime,
+                runtimeVerified: true,
+                migrationOnlyLaunchCheck: false) == (inFlight ? .deliveryUnconfirmed : .notify))
+            #expect(PostUpdateController.notificationContinuation(
+                receipt: pendingRuntime,
+                runtimeVerified: true,
+                migrationOnlyLaunchCheck: true) == .completeSilently)
+        }
+    }
+
+    @Test func `paused retries and unfinished setup repair stay with the core updater`() {
+        let setup = PostAppUpdateReceipt(
+            fromVersion: "2026.8.1",
+            toVersion: "2026.9.1",
+            recordedAt: .distantPast,
+            gatewayUpdateIncomplete: true,
+            setupRecovery: true)
+        let migration = PostAppUpdateReceipt(
+            fromVersion: "2026.8.1",
+            toVersion: "2026.9.1",
+            recordedAt: .distantPast,
+            gatewayUpdateIncomplete: true)
+        for paused in [false, true] {
+            #expect(!PostUpdateController.allowsNodeMigration(paused: paused, canActivate: true, receipt: setup))
+            #expect(PostUpdateController
+                .allowsNodeMigration(paused: paused, canActivate: true, receipt: migration) == !paused)
+            #expect(PostUpdateController
+                .allowsNodeMigration(paused: paused, canActivate: true, receipt: nil) == !paused)
+        }
+        // A remote primary without a local companion is unpaused but has no local activation intent.
+        #expect(!PostUpdateController.allowsNodeMigration(paused: false, canActivate: false, receipt: migration))
+        #expect(!PostUpdateController.allowsNodeMigration(paused: false, canActivate: false, receipt: nil))
+        #expect(PostUpdateController.notificationContinuation(
+            receipt: setup, runtimeVerified: false, migrationOnlyLaunchCheck: false) == .waitForRuntime)
     }
 }
