@@ -110,7 +110,6 @@ import {
 } from "../state/agent-database-admission.js";
 import {
   createCronExitWatchers,
-  reconcileCronExitWatchers,
   type CronExitResult,
   type CronExitWatcherHandlers,
   type CronExitWatchers,

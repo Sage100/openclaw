@@ -69,18 +69,6 @@ function isWatchableExitJob(job: CronJob): job is OnExitCronJob {
 }
 
 /** Disabled cron retires every watched command; enabled cron follows the current jobs. */
-export function reconcileCronExitWatchers(params: {
-  cronEnabled: boolean;
-  exitWatchers: CronExitWatchers;
-  jobs: CronJob[];
-}) {
-  if (!params.cronEnabled) {
-    void params.exitWatchers.cancelAll();
-    return;
-  }
-  params.exitWatchers.reconcile(params.jobs);
-}
-
 export function createCronExitWatchers(
   initialHandlers: CronExitWatcherHandlers,
   scheduler: GatewayScheduler,
