@@ -195,7 +195,11 @@ function preparePlanGroup(
         group,
         watchMode: resolveExplicitVitestMode(["run", ...vitestArgs]) === "watch",
       }),
-      targets: chunk.map((target) => relativizeExtensionVitestPath(target)),
+      targets: chunk.map((target) => {
+        const relative = relativizeExtensionVitestPath(target);
+        // Bare plugin names are substring filters; retain the directory boundary.
+        return group.extensionIds.includes(relative) ? `${relative}/` : relative;
+      }),
     }),
   );
   const bunInvocations: typeof invocations = [];
@@ -238,7 +242,12 @@ function combineSinglePluginGroups(
                 config,
                 args: relativizeExtensionVitestArgs(vitestArgs),
                 targets: targets.filter(
-                  (target) => !targets.some((root) => target.startsWith(`${root}/`)),
+                  (target) =>
+                    !targets.some(
+                      (root) =>
+                        root !== target &&
+                        target.startsWith(root.endsWith("/") ? root : `${root}/`),
+                    ),
                 ),
                 env: {
                   ...createGroupEnv({
