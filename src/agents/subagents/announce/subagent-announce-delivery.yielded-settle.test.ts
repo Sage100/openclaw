@@ -69,6 +69,43 @@ describe("yielded private settle outcomes", () => {
       expected: { delivered: false, reason: "visible_reply_missing" },
     },
     {
+      name: "message-tool room: final sent with the message tool",
+      response: {
+        status: "ok",
+        result: {
+          payloads: [],
+          didSendViaMessagingTool: true,
+          messagingToolSentTargets: [
+            {
+              tool: "message",
+              provider: "discord",
+              accountId: "acct-1",
+              to: "dm:U123",
+              text: "parent answer",
+              sourceReplyFinal: true,
+            },
+          ],
+        },
+      },
+      expected: { delivered: true, requesterVisibleFinalDelivered: true },
+    },
+    {
+      // The room's reply policy held back plain final text; it is not retried or forced out.
+      name: "message-tool room: plain final suppressed by policy",
+      response: {
+        status: "ok",
+        result: {
+          payloads: [{ text: "parent answer" }],
+          deliveryStatus: {
+            status: "suppressed",
+            reason: "message_tool_only",
+            resultCount: 0,
+          },
+        },
+      },
+      expected: { delivered: false, disposition: "intentional_non_delivery", terminal: true },
+    },
+    {
       name: "transferred next wave",
       response: {
         status: "ok",
@@ -120,13 +157,15 @@ describe("yielded private settle outcomes", () => {
     if ("replaced" in testCase) {
       expect(dispatch).not.toHaveBeenCalled();
     } else {
-      expect(dispatch.mock.calls[0]?.[1]).toMatchObject({
+      const agentParams = dispatch.mock.calls[0]?.[1];
+      expect(agentParams).toMatchObject({
         deliver: true,
         channel: "discord",
         to: "dm:U123",
-        sourceReplyDeliveryMode: "automatic",
         expectedExistingSessionId: "requester-session-dm",
       });
+      // The conversation's configured reply policy decides, not this handoff.
+      expect(agentParams).not.toHaveProperty("sourceReplyDeliveryMode");
     }
     expect(send).not.toHaveBeenCalled();
   });

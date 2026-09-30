@@ -98,7 +98,8 @@ describe("maybeWakeRequesterAfterAllChildrenSettled private batches", () => {
     const trigger = String(deliveredCallArg().triggerMessage);
     expect(trigger).toContain("private marker");
     expect(trigger).not.toContain("Your final reply stays internal");
-    expect(trigger).toContain("Your final reply is delivered to the original conversation");
+    expect(trigger).toContain("under its normal reply rules");
+    expect(trigger).toContain("must go through the message tool, send your answer with it");
     expect(trigger).toContain("when no user-facing update is owed");
     expect(transitionBatchSpy.mock.calls.at(0)?.[1]).toMatchObject({
       status: "dispatching",

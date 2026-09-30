@@ -282,8 +282,10 @@ export async function sendSubagentAnnounceDirectly(
         onDeliveryResult: params.onDeliveryResult,
         isSourceSessionEffectsAllowed: isCompletionDeliveryAllowed,
       });
-    // Synthetic requester-settle turns must not inherit a tool-only mode that suppresses the final.
-    const completionSourceReplyDeliveryMode = requesterSessionBound
+    // A private settle turn never delivers; automatic only keeps a tool-only mode from
+    // suppressing its internal final. A deliverable yielded turn omits the mode so the
+    // conversation's configured reply policy decides, as for any other requester turn.
+    const completionSourceReplyDeliveryMode = parentOnly
       ? "automatic"
       : requiresMessageToolDelivery
         ? "message_tool_only"
