@@ -444,7 +444,7 @@ it(
           const reply = owner
             .request("openclaw.setup.auth.start", { ...auth, sessionId: "revoked-retry" })
             .then(
-              (result) => ({ result }),
+              (value) => ({ result: value }),
               (error: unknown) => ({ error }),
             );
           try {
