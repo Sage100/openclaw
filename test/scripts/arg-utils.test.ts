@@ -6,6 +6,7 @@ import {
   intFlag,
   isOpenEndedTruthyValue,
   isStrictAffirmativeValue,
+  isTrueOrOne,
   parseFlagArgs,
   parsePermissiveBooleanToken,
   parseStrictBooleanArg,
@@ -88,6 +89,20 @@ describe("scripts/lib/arg-utils permissive Boolean tokens", () => {
 });
 
 describe("scripts/lib/arg-utils environment Boolean policies", () => {
+  it.each([
+    { input: undefined, expected: false },
+    { input: "", expected: false },
+    { input: "0", expected: false },
+    { input: " FALSE ", expected: false },
+    { input: "yes", expected: false },
+    { input: "on", expected: false },
+    { input: "enabled", expected: false },
+    { input: " 1 ", expected: true },
+    { input: " TRUE ", expected: true },
+  ])("keeps the CI flag language closed for $input", ({ input, expected }) => {
+    expect(isTrueOrOne(input)).toBe(expected);
+  });
+
   it.each([
     { input: undefined, expected: false },
     { input: "", expected: false },

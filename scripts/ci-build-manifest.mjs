@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import path, { matchesGlob } from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveTestGitCommits } from "../.github/actions/git-owner/test-prerequisites.mjs";
+import { isTrueOrOne } from "./lib/arg-utils.runtime.mjs";
 import { resolveReleaseContextIdentity } from "./lib/release-context.mjs";
 import { classifyReleaseTrain, parseReleaseVersion } from "./lib/release-version.mjs";
 
@@ -68,12 +69,12 @@ if (!sourceChannelTestEnv) {
   };
 }
 
-const importTargetPlan = async (path) => {
-  if (existsSync(path)) {
-    return import(fromTarget(path));
+const importTargetPlan = async (modulePath) => {
+  if (existsSync(modulePath)) {
+    return import(fromTarget(modulePath));
   }
   if (!compatibilityTarget) {
-    throw new Error(`Current CI target does not provide ${path}`);
+    throw new Error(`Current CI target does not provide ${modulePath}`);
   }
   return {};
 };
@@ -97,14 +98,6 @@ const createChannelContractTestShards =
   typeof channelContractPlan.createChannelContractTestShards === "function"
     ? channelContractPlan.createChannelContractTestShards
     : () => [];
-
-const parseBoolean = (value, fallback = false) => {
-  if (value === undefined) return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "true" || normalized === "1") return true;
-  if (normalized === "false" || normalized === "0" || normalized === "") return false;
-  return fallback;
-};
 
 const pluginContractPlan = await importTargetPlan(
   existsSync("./scripts/lib/plugin-contract-test-plan.mts")
@@ -146,14 +139,16 @@ const changedPaths = (() => {
         ? readFileSync(manifestPath, "utf8")
         : (process.env.OPENCLAW_CI_CHANGED_PATHS_JSON ?? "null"),
     );
-    return Array.isArray(value) && value.every((path) => typeof path === "string") ? value : null;
+    return Array.isArray(value) && value.every((changedPath) => typeof changedPath === "string")
+      ? value
+      : null;
   } catch {
     return null;
   }
 })();
-const docsOnly = parseBoolean(process.env.OPENCLAW_CI_DOCS_ONLY);
-const docsChanged = parseBoolean(process.env.OPENCLAW_CI_DOCS_CHANGED);
-const releaseGate = parseBoolean(process.env.OPENCLAW_CI_RELEASE_GATE) && !ciQualification;
+const docsOnly = isTrueOrOne(process.env.OPENCLAW_CI_DOCS_ONLY);
+const docsChanged = isTrueOrOne(process.env.OPENCLAW_CI_DOCS_CHANGED);
+const releaseGate = isTrueOrOne(process.env.OPENCLAW_CI_RELEASE_GATE) && !ciQualification;
 const compactPullRequest = isCanonicalRepository && eventName === "pull_request";
 const runtimePullRequest = isCanonicalRepository && (compactPullRequest || releaseGate);
 // Exact-head release gates substitute for PR CI. Ordinary manual CI
@@ -215,7 +210,7 @@ if (npmQualification) {
   try {
     identity = resolveReleaseContextIdentity(contextRef ?? "", packageVersion);
   } catch (error) {
-    throw new Error(`release_scope ${releaseScope}: ${error.message}`);
+    throw new Error(`release_scope ${releaseScope}: ${error.message}`, { cause: error });
   }
   if (!identity || identity.kind === "extended-stable branch") {
     throw new Error(
@@ -239,11 +234,11 @@ const toolingOwnerChange =
   typeof nodeTestPlan.isToolingTestOwnerPath === "function" &&
   changedPaths.some(nodeTestPlan.isToolingTestOwnerPath);
 const nodeDataOnly =
-  eventName === "pull_request" && parseBoolean(process.env.OPENCLAW_CI_NODE_TEST_DATA_ONLY);
+  eventName === "pull_request" && isTrueOrOne(process.env.OPENCLAW_CI_NODE_TEST_DATA_ONLY);
 const nativeGeneratedOnly =
   workflowEventName === "pull_request" &&
   isCanonicalRepository &&
-  !parseBoolean(process.env.OPENCLAW_CI_FULL) &&
+  !isTrueOrOne(process.env.OPENCLAW_CI_FULL) &&
   process.env.OPENCLAW_CI_HEAD_REPOSITORY === process.env.OPENCLAW_CI_REPOSITORY &&
   process.env.OPENCLAW_CI_PR_AUTHOR_TYPE === "Bot" &&
   (
@@ -252,16 +247,16 @@ const nativeGeneratedOnly =
 const runNode =
   !nodeDataOnly &&
   !nativeGeneratedOnly &&
-  ((parseBoolean(process.env.OPENCLAW_CI_RUN_NODE) && !docsOnly) || toolingOwnerChange);
+  ((isTrueOrOne(process.env.OPENCLAW_CI_RUN_NODE) && !docsOnly) || toolingOwnerChange);
 const runNodeFastOnly =
   runNode &&
   !runtimePullRequest &&
   !toolingOwnerChange &&
-  parseBoolean(process.env.OPENCLAW_CI_RUN_NODE_FAST_ONLY);
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_NODE_FAST_ONLY);
 const runNodeFull = runNode && !runNodeFastOnly;
 // release-fast-lane: label-admitted narrow gate for release tooling PRs.
 // Canonical PR CI only; declined runs keep every ordinary decision.
-const releaseFastLaneLabel = parseBoolean(process.env.OPENCLAW_CI_RELEASE_FAST_LANE_LABEL);
+const releaseFastLaneLabel = isTrueOrOne(process.env.OPENCLAW_CI_RELEASE_FAST_LANE_LABEL);
 const releaseFastLaneScope = !releaseFastLaneLabel
   ? null
   : !(
@@ -286,7 +281,8 @@ const runCheck =
   runNodeFull ||
   (!docsOnly &&
     nodeDataOnly &&
-    (changedPaths === null || changedPaths.some((path) => /\.[cm]?tsx?$/u.test(path))));
+    (changedPaths === null ||
+      changedPaths.some((changedPath) => /\.[cm]?tsx?$/u.test(changedPath))));
 const runnerProfile = process.env.OPENCLAW_CI_RUNNER_PROFILE ?? "blacksmith";
 // Eligible paths share the consumer selector; hosted rows intersect
 // those consumers with their canonical stripes.
@@ -308,16 +304,16 @@ if (
   if (typeof lanes.getChangedCoreTestPaths === "function") {
     const coreTestPaths = lanes.getChangedCoreTestPaths(lanes.detectChangedLanes(changedPaths));
     // Deleted leaves need the full plan.
-    if (coreTestPaths?.length && coreTestPaths.every((path) => existsSync(path))) {
+    if (coreTestPaths?.length && coreTestPaths.every((testPath) => existsSync(testPath))) {
       changedCoreTestPaths = coreTestPaths;
     }
   }
 }
 
 const runNodeFastPluginContracts =
-  runNode && parseBoolean(process.env.OPENCLAW_CI_RUN_NODE_FAST_PLUGIN_CONTRACTS);
+  runNode && isTrueOrOne(process.env.OPENCLAW_CI_RUN_NODE_FAST_PLUGIN_CONTRACTS);
 const runNodeFastCiRouting =
-  runNode && parseBoolean(process.env.OPENCLAW_CI_RUN_NODE_FAST_CI_ROUTING);
+  runNode && isTrueOrOne(process.env.OPENCLAW_CI_RUN_NODE_FAST_CI_ROUTING);
 const proposedCheckScope =
   runtimePullRequest &&
   (!frozenTarget || releaseGate) &&
@@ -336,7 +332,7 @@ const channelContractShards =
   !runtimePullRequest && runNodeFull && !releaseFastLane ? createChannelContractTestShards() : [];
 const runMacos =
   !nativeGeneratedOnly &&
-  parseBoolean(process.env.OPENCLAW_CI_RUN_MACOS) &&
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_MACOS) &&
   !docsOnly &&
   isCanonicalRepository &&
   !releaseFastLane;
@@ -344,7 +340,7 @@ const runMacos =
 const runMacosNode =
   runMacos ||
   (!nativeGeneratedOnly &&
-    parseBoolean(process.env.OPENCLAW_CI_RUN_MACOS_NODE) &&
+    isTrueOrOne(process.env.OPENCLAW_CI_RUN_MACOS_NODE) &&
     !docsOnly &&
     isCanonicalRepository &&
     !releaseFastLane);
@@ -356,7 +352,7 @@ const supportsIosBuild = hasPackageScript("ios:build");
 const supportsCurrentIosCi = supportsIosBuild && supportsCurrentMacosSwiftCi;
 const runIosBuild =
   !nativeGeneratedOnly &&
-  parseBoolean(process.env.OPENCLAW_CI_RUN_IOS_BUILD) &&
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_IOS_BUILD) &&
   !releaseFastLane &&
   !npmQualification &&
   !docsOnly &&
@@ -364,7 +360,7 @@ const runIosBuild =
   (!frozenTarget || supportsCurrentIosCi || (releaseCandidateTarget && supportsIosBuild));
 const runAndroid =
   !nativeGeneratedOnly &&
-  parseBoolean(process.env.OPENCLAW_CI_RUN_ANDROID) &&
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_ANDROID) &&
   !npmQualification &&
   !docsOnly &&
   isCanonicalRepository &&
@@ -379,17 +375,17 @@ const runAndroidAccessNative =
       "apps/android/app/src/androidTest/java/ai/openclaw/app/gateway/CloudflareAccessNativeTest.kt",
     ));
 let runWindows =
-  parseBoolean(process.env.OPENCLAW_CI_RUN_WINDOWS) &&
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_WINDOWS) &&
   !releaseFastLane &&
   !docsOnly &&
   !runNodeFastOnly &&
   isCanonicalRepository;
 const runSkillsPython =
-  parseBoolean(process.env.OPENCLAW_CI_RUN_SKILLS_PYTHON) && !docsOnly && !releaseFastLane;
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_SKILLS_PYTHON) && !docsOnly && !releaseFastLane;
 const runControlUiI18n =
-  parseBoolean(process.env.OPENCLAW_CI_RUN_CONTROL_UI_I18N) && !docsOnly && !releaseFastLane;
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_CONTROL_UI_I18N) && !docsOnly && !releaseFastLane;
 let runUiTests =
-  parseBoolean(process.env.OPENCLAW_CI_RUN_UI_TESTS) &&
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_UI_TESTS) &&
   !docsOnly &&
   !nodeDataOnly &&
   !releaseFastLane;
@@ -446,7 +442,7 @@ const supportsNativeI18n =
   hasPackageScript("android:i18n:check") &&
   hasPackageScript("apple:i18n:check");
 const runNativeI18n =
-  parseBoolean(process.env.OPENCLAW_CI_RUN_NATIVE_I18N) &&
+  isTrueOrOne(process.env.OPENCLAW_CI_RUN_NATIVE_I18N) &&
   !releaseFastLane &&
   !npmQualification &&
   !docsOnly &&
@@ -464,12 +460,12 @@ const androidTestTier = !fullNativeValidation && !useCompatibleAndroidCi;
 const androidBenchmarkChanged =
   !changedPaths?.length ||
   changedPaths.some(
-    (path) =>
-      !path.trim() ||
-      matchesGlob(path, "apps/android/{benchmark,buildSrc,build-logic,gradle,Config}/**") ||
-      matchesGlob(path, "apps/android/**/*.gradle{,.kts}") ||
-      matchesGlob(path, "apps/android/**/gradle.properties") ||
-      matchesGlob(path, "apps/android/gradlew{,.bat}"),
+    (changedPath) =>
+      !changedPath.trim() ||
+      matchesGlob(changedPath, "apps/android/{benchmark,buildSrc,build-logic,gradle,Config}/**") ||
+      matchesGlob(changedPath, "apps/android/**/*.gradle{,.kts}") ||
+      matchesGlob(changedPath, "apps/android/**/gradle.properties") ||
+      matchesGlob(changedPath, "apps/android/gradlew{,.bat}"),
   );
 const supportsFormatCheck = targetWorkflow.split("pnpm format:check").length - 1 >= 2;
 const runFormatCheck = !frozenTarget || supportsFormatCheck;
@@ -493,14 +489,12 @@ if (runNodeFull && !releaseFastLane) {
     { check_name: "checks-fast-bundled-protocol", runtime: "node", task: "bundled-protocol" },
     { check_name: "checks-fast-bun-launcher", runtime: "bun", task: "bun-launcher" },
   );
-} else {
-  if (runNodeFastCiRouting && !releaseFastLane) {
-    checksFastCoreTasks.push({
-      check_name: "checks-fast-ci-routing",
-      runtime: "node",
-      task: "ci-routing",
-    });
-  }
+} else if (runNodeFastCiRouting && !releaseFastLane) {
+  checksFastCoreTasks.push({
+    check_name: "checks-fast-ci-routing",
+    runtime: "node",
+    task: "ci-routing",
+  });
 }
 if (releaseGate) {
   checksFastCoreTasks.push(
@@ -559,7 +553,9 @@ let uiTestGroups =
     : null;
 let uiTestShardCount = compatibilityTarget ? 1 : 3;
 if (selectedTestTargets) {
-  if (!uiTestGroups) throw new Error("Current PR CI requires UI target groups");
+  if (!uiTestGroups) {
+    throw new Error("Current PR CI requires UI target groups");
+  }
   const selected = new Set(selectedTestTargets);
   const { controlUiE2eTestGlobs, isUiTestTarget, uiE2eRealGatewayTestFiles } = await import(
     fromTarget("./test/vitest/vitest.ui-paths.mjs")
@@ -612,11 +608,7 @@ const plannedWindowsShards =
     : null;
 const windowsShards =
   plannedWindowsShards
-    ?.map((shard) => ({
-      ...shard,
-      runtime: "node",
-      task: "test",
-    }))
+    ?.map((shard) => Object.assign({}, shard, { runtime: "node", task: "test" }))
     .filter((shard) => shard.targets.length > 0) ??
   (runWindows
     ? [1, 2].map((part) => ({
@@ -625,7 +617,9 @@ const windowsShards =
         task: `test-${part}`,
       }))
     : []);
-if (selectedTestTargets) runWindows = windowsShards.length > 0;
+if (selectedTestTargets) {
+  runWindows = windowsShards.length > 0;
+}
 const startupCorpusTestFiles =
   typeof nodeTestPlan.resolveStartupCorpusTestFiles === "function"
     ? nodeTestPlan
@@ -871,7 +865,9 @@ if (
   process.env.OPENCLAW_CI_NODE_RUNNER_BACKEND === "runson"
 ) {
   const cron = rawNodeTestShards.find((shard) => shard.runner === "runson-c8i-8xlarge");
-  if (!cron) throw new Error("RunsOn qualification requires selected cron tests");
+  if (!cron) {
+    throw new Error("RunsOn qualification requires selected cron tests");
+  }
   // One dispatch compares the same child contracts and worker ceiling.
   for (const [provider, runner] of [
     ["blacksmith", "blacksmith-32vcpu-ubuntu-2404"],
@@ -897,7 +893,9 @@ const projectFrozenNodeTestPlan = (plan) => {
 const targetNodeTestShards = compatibilityTarget
   ? rawNodeTestShards.flatMap((shard) => {
       const groups = shard.groups?.map(projectFrozenNodeTestPlan).filter((group) => group !== null);
-      if (shard.groups?.length && !groups?.length) return [];
+      if (shard.groups?.length && !groups?.length) {
+        return [];
+      }
       const projected = projectFrozenNodeTestPlan({ ...shard, groups });
       return projected ? [projected] : [];
     })
@@ -1107,7 +1105,9 @@ const startupCorpusNodeRevision =
 if (startupCorpusNodeRevision) {
   // The exact-tree Node receipt makes this row's only test step a no-op.
   const startupTask = checksFastCoreTasks.findIndex(({ task }) => task === "startup-corpus");
-  if (startupTask >= 0) checksFastCoreTasks.splice(startupTask, 1);
+  if (startupTask >= 0) {
+    checksFastCoreTasks.splice(startupTask, 1);
+  }
 }
 // Targeted PRs keep source boundary guards in their Node plan. Only
 // an actual dist descriptor transfers that owner to build-artifacts.
@@ -1202,8 +1202,12 @@ const checkTasks = [
   },
   { check_name: "check-test-types", task: "test-types", runner: "blacksmith-16vcpu-ubuntu-2404" },
 ].filter((row) => {
-  if (!narrowCheckScope) return true;
-  if (row.task === "prod-types" || row.task === "test-types") return narrowCheckScope.types;
+  if (!narrowCheckScope) {
+    return true;
+  }
+  if (row.task === "prod-types" || row.task === "test-types") {
+    return narrowCheckScope.types;
+  }
   return row.task === "lint"
     ? narrowCheckScope.lint
     : narrowCheckScope.checkTasks.includes(row.task);
@@ -1217,7 +1221,9 @@ if (
   checkTasks.some(({ task }) => task === "guards")
 ) {
   const coercionTask = checksFastCoreTasks.findIndex(({ task }) => task === "coercion-helpers");
-  if (coercionTask >= 0) checksFastCoreTasks.splice(coercionTask, 1);
+  if (coercionTask >= 0) {
+    checksFastCoreTasks.splice(coercionTask, 1);
+  }
 }
 
 const manifest = {
@@ -1499,8 +1505,8 @@ if (hybridHostedEligible) {
     "macos-node": count(manifest.run_macos_node, manifest.macos_node_matrix.include.length),
     "macos-swift": count(manifest.run_macos_swift, 2),
     "ios-build": count(manifest.run_ios_build),
-    "ios-screenshot-shard": count(parseBoolean(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS), 2),
-    "ios-screenshot-evidence": count(parseBoolean(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS)),
+    "ios-screenshot-shard": count(isTrueOrOne(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS), 2),
+    "ios-screenshot-evidence": count(isTrueOrOne(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS)),
     "android-access-native": count(manifest.run_android_access_native, 2),
     "docker-seed-e2e": count(
       manifest.run_docker_seed_e2e &&
@@ -1645,7 +1651,7 @@ manifest.pr_job_count =
       countPrJobs(manifest.run_ios_build) +
       (manifest.run_ui_real_gateway ? uiRealGatewayShards.length : 0) +
       countPrJobs(manifest.run_android_access_native, 2) +
-      countPrJobs(parseBoolean(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS), 3);
+      countPrJobs(isTrueOrOne(process.env.OPENCLAW_CI_RUN_IOS_SCREENSHOTS), 3);
 
 for (const [key, value] of Object.entries(manifest)) {
   appendFileSync(
@@ -1668,7 +1674,7 @@ if (releaseFastLane) {
         `- Running: ${running}.\n` +
         "- Skipped: contracts, baseline ratchets, bundled protocol, Bun launcher, additional checks, Control UI, Windows, macOS, iOS, Android, native and Control UI i18n, skills-python.\n" +
         (changedNodeTestFallbackReason
-          ? `- Node plan: bounded owner selection (${changedNodeTestFallbackReason}).\n`
+          ? `- Node plan: bounded owner selection (${String(changedNodeTestFallbackReason)}).\n`
           : "") +
         "\n",
     );
